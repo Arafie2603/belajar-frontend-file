@@ -3,7 +3,7 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}"
   ],
-  darkMode: "class", // Bisa 'media' atau 'class'
+  darkMode: "class",
   theme: {
     extend: {},
   },
