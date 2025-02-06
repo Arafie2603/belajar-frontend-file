@@ -1,6 +1,6 @@
 import { lazy } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
-import DashboardLayout from '../layouts/dashboard_layout';
+import DashboardLayout from '../layouts/Dashboard_Layout';
 import SuratMasuk from '../pages/SuratMasuk';
 
 // Lazy load pages
