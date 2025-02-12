@@ -1,90 +1,150 @@
-import React from "react";
-import { Form, Input, Button, Checkbox, Card, Typography } from "antd";
-import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
-const { Title, Text } = Typography;
-
+// Types
+const API_URL = 'http://localhost:3000';
 interface LoginFormValues {
-  email: string;
+  nomor_identitas: string;
   password: string;
   remember?: boolean;
 }
 
+interface LoginFormValues {
+  nomor_identitas: string;
+  password: string;
+  remember?: boolean;
+}
+
+
 const Login: React.FC = () => {
-  const onFinish = (values: LoginFormValues) => {
-    console.log("Success:", values);
-    // Handle login logic here
+  const navigate = useNavigate();
+  const [error, setError] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+
+  const onFinish = async (values: LoginFormValues) => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const response = await axios.post(`${API_URL}/api/users/login`, {
+        nomor_identitas: values.nomor_identitas,
+        password: values.password
+      });
+
+      if (response.data.status === 200) {
+        // Store the JWT token
+        localStorage.setItem('token', response.data.data.token);
+        
+        // Store user data if needed
+        localStorage.setItem('user', JSON.stringify(response.data.data.user));
+
+        // Set up axios default headers for future requests
+        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.data.token}`;
+
+        // Redirect to dashboard or home page
+        navigate('/surat-masuk');
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An error occurred during login. Please try again.');
+      }
+    }
+    finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 to-blue-700 px-4">
-      <Card className="w-full max-w-md shadow-xl" bordered={false}>
-        <div className="text-center mb-8">
-          <Title level={2} className="text-blue-900">E-Filing Website</Title>
-          <Text className="text-gray-600">Sign in to your account</Text>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Sign in to your account
+          </h2>
         </div>
+        
+        {error && (
+          <div className="rounded-md bg-red-50 p-4">
+            <div className="text-sm text-red-700">{error}</div>
+          </div>
+        )}
 
-        <Form
-          name="login_form"
-          initialValues={{ remember: true }}
-          onFinish={onFinish}
-          layout="vertical"
-          size="large"
-        >
-          <Form.Item
-            name="nomor_identitas"
-            label="Nomor Identitas"
-            rules={[
-              { required: true, message: "Please input your email!" },
-            ]}
-          >
-            <Input 
-              prefix={<UserOutlined className="text-gray-400" />} 
-              placeholder="Enter your email" 
-              className="rounded-md"
-            />
-          </Form.Item>
+        <form className="mt-8 space-y-6" onSubmit={(e) => {
+          e.preventDefault();
+          const formData = new FormData(e.currentTarget);
+          onFinish({
+            nomor_identitas: formData.get('nomor_identitas') as string,
+            password: formData.get('password') as string,
+            remember: formData.get('remember') === 'true'
+          });
+        }}>
+          <div className="rounded-md shadow-sm -space-y-px">
+            <div>
+              <label htmlFor="nomor-identitas" className="sr-only">
+                Nomor Identitas
+              </label>
+              <input
+                id="nomor-identitas"
+                name="nomor_identitas"
+                type="text"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="Nomor Identitas"
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="sr-only">
+                Password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="Password"
+              />
+            </div>
+          </div>
 
-          <Form.Item
-            name="password"
-            label="Password"
-            rules={[{ required: true, message: "Please input your password!" }]}
-          >
-            <Input.Password
-              prefix={<LockOutlined className="text-gray-400" />}
-              placeholder="Enter your password"
-              className="rounded-md"
-            />
-          </Form.Item>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <input
+                id="remember"
+                name="remember"
+                type="checkbox"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="remember" className="ml-2 block text-sm text-gray-900">
+                Remember me
+              </label>
+            </div>
 
-          <Form.Item className="mb-2">
-            <div className="flex justify-between items-center">
-              <Form.Item name="remember" valuePropName="checked" noStyle>
-                <Checkbox>Remember me</Checkbox>
-              </Form.Item>
-              <a className="text-blue-600 hover:text-blue-800" href="#">
+            <div className="text-sm">
+              <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
                 Forgot password?
               </a>
             </div>
-          </Form.Item>
+          </div>
 
-          <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 border-blue-600 hover:border-blue-700"
+          <div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              Sign In
-            </Button>
-          </Form.Item>
-        </Form>
+              {loading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </div>
+        </form>
 
-        <div className="text-center mt-6">
-          <Text className="text-gray-600 text-sm">
-            ©2025 Created by LAB ICT
-          </Text>
+        <div className="text-center text-sm text-gray-500">
+          ©2025 Created by LAB ICT
         </div>
-      </Card>
+      </div>
     </div>
   );
 };
