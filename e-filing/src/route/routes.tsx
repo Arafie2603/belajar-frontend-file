@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import DashboardLayout from '../layouts/Dashboard_Layout';
 import Login from '../pages/Login';
 
@@ -9,11 +9,6 @@ const SuratMasuk = lazy(() => import('../pages/SuratMasuk'));
 const AppRoutes = createBrowserRouter([
     {
         path:'/',
-        index: true,
-        element: <Login />,
-    },
-    {
-        path: "/login",
         element: <Login />,
     },
     {
@@ -27,7 +22,7 @@ const AppRoutes = createBrowserRouter([
             {
                 path: "surat-masuk",
                 element: <SuratMasuk />,
-            },
+            }
         ]
     },
 ])
