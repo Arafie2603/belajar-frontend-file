@@ -1,26 +1,34 @@
 import { lazy } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import DashboardLayout from '../layouts/Dashboard_Layout';
-import SuratMasuk from '../pages/SuratMasuk';
+import Login from '../pages/Login';
 
-// Lazy load pages
-// const Login = lazy(() => import('../pages/Login'));
 const SuratKeluar = lazy(() => import('../pages/SuratKeluar'));
+const SuratMasuk = lazy(() => import('../pages/SuratMasuk'));
 
 const AppRoutes = createBrowserRouter([
     {
-        path: "/",
+        path:'/',
+        index: true,
+        element: <Login />,
+    },
+    {
+        path: "/login",
+        element: <Login />,
+    },
+    {
+        path: "/dashboard",
         element: <DashboardLayout />,
         children: [
             {
-                path: "/surat-keluar",
+                path: "surat-keluar",
                 element: <SuratKeluar />,
             },
             {
-                path: "/surat-masuk",
+                path: "surat-masuk",
                 element: <SuratMasuk />,
             },
         ]
-    }
+    },
 ])
 export default AppRoutes;

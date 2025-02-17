@@ -7,7 +7,7 @@ import {
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { Layout, Menu, theme } from 'antd';
-import { Navigate, Outlet, useNavigate } from 'react-router';
+import {  Outlet, useNavigate } from 'react-router';
 
 const { Header, Footer, Sider } = Layout;
 
@@ -34,8 +34,8 @@ function getItem(
 const getMenuItems = (navigate: (path: string) => void): MenuItem[] => [
     getItem('Dashboard', '1', <DesktopOutlined />, undefined, () => navigate('/dashboard')),
     getItem('Data Transaksi', 'sub1', <UserOutlined />, [
-        getItem('Surat Masuk', '2', undefined, undefined, () => navigate('/surat-masuk')),
-        getItem('Surat Keluar', '3', undefined, undefined, () => navigate('/surat-keluar')),
+        getItem('Surat Masuk', '2', undefined, undefined, () => navigate('surat-masuk')),
+        getItem('Surat Keluar', '3', undefined, undefined, () => navigate('surat-keluar')),
         getItem('Notulen', '4'),
         getItem('Faktur', '5'),
     ]),
