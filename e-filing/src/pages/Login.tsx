@@ -27,7 +27,7 @@ const Login: React.FC = () => {
       setLoading(true);
       setError('');
 
-      const response = await axios.post(`${API_URL}/api/users/login`, {
+      const response = await axios.post(`https://belajar-backend-2ya9omyb5-arafie2603s-projects.vercel.app/api/users/login`, {
         nomor_identitas: values.nomor_identitas,
         password: values.password
       });
@@ -35,7 +35,7 @@ const Login: React.FC = () => {
       if (response.data.status === 200) {
         // Store the JWT token
         localStorage.setItem('token', response.data.data.token);
-        
+
         // Store user data if needed
         localStorage.setItem('user', JSON.stringify(response.data.data.user));
 
@@ -43,7 +43,7 @@ const Login: React.FC = () => {
         axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.data.token}`;
 
         // Redirect to dashboard or home page
-        navigate('/surat-masuk');
+        navigate('/dashboard');
       }
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -65,7 +65,7 @@ const Login: React.FC = () => {
             Sign in to your account
           </h2>
         </div>
-        
+
         {error && (
           <div className="rounded-md bg-red-50 p-4">
             <div className="text-sm text-red-700">{error}</div>
