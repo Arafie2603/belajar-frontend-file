@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 // Types
-const API_URL = 'http://localhost:3000';
 interface LoginFormValues {
   nomor_identitas: string;
   password: string;
@@ -26,8 +25,8 @@ const Login: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-
-      const response = await axios.post(`https://belajar-backend-2ya9omyb5-arafie2603s-projects.vercel.app/api/users/login`, {
+      const BASE_URL = import.meta.env.VITE_BASE_URL;
+      const response = await axios.post(`${BASE_URL}api/users/login`, {
         nomor_identitas: values.nomor_identitas,
         password: values.password
       });

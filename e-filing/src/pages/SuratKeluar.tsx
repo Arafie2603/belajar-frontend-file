@@ -24,8 +24,9 @@ const SuratKeluar: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const BASE_URL = import.meta.env.VITE_BASE_URL;
         const response = await axios.get(
-          'https://belajar-backend-2ya9omyb5-arafie2603s-projects.vercel.app/api/surat-keluar'
+          `${BASE_URL}api/surat-keluar`
         );
 
         if (response.status === 200 && response.data.data.paginatedData) {

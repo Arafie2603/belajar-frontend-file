@@ -25,8 +25,9 @@ const SuratMasuk: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const BASE_URL = import.meta.env.VITE_BASE_URL;
         const response = await axios.get(
-          'https://belajar-backend-2ya9omyb5-arafie2603s-projects.vercel.app/api/surat-masuk'
+          `${BASE_URL}api/surat-masuk`
         );
 
         if (response.status === 200 && response.data.data.paginatedData) {
@@ -41,7 +42,7 @@ const SuratMasuk: React.FC = () => {
             perihal: item.perihal,
             tujuanSurat: item.tujuan,
             scanSurat: item.scan_surat,
-          }));          
+          }));
           setData(formattedData);
         }
       } catch (error) {
@@ -58,7 +59,11 @@ const SuratMasuk: React.FC = () => {
       title: 'Detail Surat Masuk',
       content: (
         <div>
-          <p><strong>Nomor Surat:</strong> {record.nomorSurat}</p>
+          <p style={{
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }} ><strong>Nomor Surat:</strong> {record.nomorSurat}</p>
           <p><strong>Tanggal:</strong> {record.tanggalSurat}</p>
           <p><strong>Perihal:</strong> {record.perihal}</p>
           <p><strong>Tujuan:</strong> {record.tujuanSurat}</p>
@@ -162,7 +167,7 @@ const SuratMasuk: React.FC = () => {
         {loading ? (
           <Spin size="large" style={{ display: 'block', textAlign: 'center', marginTop: 50 }} />
         ) : (
-          <Table<DataType> columns={columns} dataSource={data} pagination={{ pageSize: 5 }}/>
+          <Table<DataType> columns={columns} dataSource={data} pagination={{ pageSize: 5 }} />
         )}
       </div>
     </Content>
