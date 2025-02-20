@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Breadcrumb, Layout, theme, Spin, Table, Button, Modal, message } from 'antd';
 import type { TableProps } from 'antd';
+import { useNavigate } from 'react-router-dom';
 
 interface DataType {
   key: string;
@@ -10,11 +11,14 @@ interface DataType {
   perihal: string;
   tujuanSurat: string;
   organisasi: string;
+  pengirim: string;
+  penerima: string;
 }
 
 const { Content } = Layout;
 
 const SuratMasuk: React.FC = () => {
+const navigate = useNavigate(); 
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
@@ -34,14 +38,15 @@ const SuratMasuk: React.FC = () => {
 
           // Format data sesuai kebutuhan tabel
           const formattedData: DataType[] = rawData.map((item: any) => ({
-            key: item.no_surat_masuk, // Pastikan setiap baris memiliki key unik
+            key: item.no_surat_masuk,
             organisasi: item.organisasi,
             nomorSurat: item.no_surat_masuk,
             tanggalSurat: new Date(item.tanggal).toLocaleDateString('id-ID'),
             perihal: item.perihal,
             tujuanSurat: item.tujuan,
             scanSurat: item.scan_surat,
-          }));          
+            pengirim: item.pengirim,
+          }));
           setData(formattedData);
         }
       } catch (error) {
@@ -54,24 +59,7 @@ const SuratMasuk: React.FC = () => {
   }, []); // Dependensi kosong agar hanya dipanggil sekali saat mount
 
   const handleDetail = (record: DataType) => {
-    Modal.info({
-      title: 'Detail Surat Masuk',
-      content: (
-        <div>
-          <p><strong>Nomor Surat:</strong> {record.nomorSurat}</p>
-          <p><strong>Tanggal:</strong> {record.tanggalSurat}</p>
-          <p><strong>Perihal:</strong> {record.perihal}</p>
-          <p><strong>Tujuan:</strong> {record.tujuanSurat}</p>
-          <p>
-            <strong>Dokumen:</strong>{' '}
-            <a href={record.nomorSurat} target="_blank" rel="noopener noreferrer">
-              Lihat Dokumen
-            </a>
-          </p>
-        </div>
-      ),
-      onOk() { },
-    });
+    navigate(`/dashboard/surat-masuk/${record.nomorSurat}`);
   };
 
   // Fungsi untuk Menghapus Surat
@@ -162,7 +150,7 @@ const SuratMasuk: React.FC = () => {
         {loading ? (
           <Spin size="large" style={{ display: 'block', textAlign: 'center', marginTop: 50 }} />
         ) : (
-          <Table<DataType> columns={columns} dataSource={data} pagination={{ pageSize: 5 }}/>
+          <Table<DataType> columns={columns} dataSource={data} pagination={{ pageSize: 5 }} />
         )}
       </div>
     </Content>
