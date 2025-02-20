@@ -6,8 +6,8 @@ import {
     UserOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
-import { Layout, Menu, theme } from 'antd';
-import {  Outlet, useNavigate } from 'react-router';
+import { Layout, Menu, theme, Button, Flex } from 'antd';
+import { Outlet, useNavigate } from 'react-router';
 
 const { Header, Footer, Sider } = Layout;
 
@@ -62,7 +62,12 @@ const DashboardLayout: React.FC = () => {
                 <Menu theme="dark" defaultSelectedKeys={['1']} mode="inline" items={getMenuItems(navigate)} />
             </Sider>
             <Layout>
-                <Header style={{ padding: 0, background: colorBgContainer }} />
+                <Header style={{ padding: 0, background: colorBgContainer }}
+                >
+                    <Flex style={{ padding: 0, width: '100%', height: '100%' }}  wrap gap="middle" justify='flex-end' align='center'>
+                        <Button danger style={{ marginRight: '20px'}} >Logout</Button>
+                    </Flex>
+                </Header>
                 <Outlet />
                 <Footer style={{ textAlign: 'center' }}>
                     E-Filing ©{new Date().getFullYear()} Created by LAB ICT

@@ -29,8 +29,9 @@ const navigate = useNavigate();
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const BASE_URL = import.meta.env.VITE_BASE_URL;
         const response = await axios.get(
-          'https://belajar-backend-2ya9omyb5-arafie2603s-projects.vercel.app/api/surat-masuk'
+          `${BASE_URL}api/surat-masuk`
         );
 
         if (response.status === 200 && response.data.data.paginatedData) {
@@ -45,7 +46,6 @@ const navigate = useNavigate();
             perihal: item.perihal,
             tujuanSurat: item.tujuan,
             scanSurat: item.scan_surat,
-            pengirim: item.pengirim,
           }));
           setData(formattedData);
         }
@@ -60,6 +60,28 @@ const navigate = useNavigate();
 
   const handleDetail = (record: DataType) => {
     navigate(`/dashboard/surat-masuk/${record.nomorSurat}`);
+    Modal.info({
+      title: 'Detail Surat Masuk',
+      content: (
+        <div>
+          <p style={{
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }} ><strong>Nomor Surat:</strong> {record.nomorSurat}</p>
+          <p><strong>Tanggal:</strong> {record.tanggalSurat}</p>
+          <p><strong>Perihal:</strong> {record.perihal}</p>
+          <p><strong>Tujuan:</strong> {record.tujuanSurat}</p>
+          <p>
+            <strong>Dokumen:</strong>{' '}
+            <a href={record.nomorSurat} target="_blank" rel="noopener noreferrer">
+              Lihat Dokumen
+            </a>
+          </p>
+        </div>
+      ),
+      onOk() { },
+    });
   };
 
   // Fungsi untuk Menghapus Surat
