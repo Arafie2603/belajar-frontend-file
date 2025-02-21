@@ -14,7 +14,6 @@ interface DataType {
   pengirim: string;
   penerima: string;
 }
-
 const { Content } = Layout;
 
 const SuratMasuk: React.FC = () => {
@@ -31,7 +30,7 @@ const SuratMasuk: React.FC = () => {
     const fetchData = async () => {
       try {
         const response = await axios.get(
-          'https://belajar-backend-2ya9omyb5-arafie2603s-projects.vercel.app/api/surat-masuk'
+          'https://belajar-backend-ten.vercel.app/api/surat-masuk'
         );
 
         if (response.status === 200 && response.data.data.paginatedData) {
