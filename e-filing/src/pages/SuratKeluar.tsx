@@ -33,6 +33,7 @@ const SuratKeluar: React.FC = () => {
           const rawData = response.data.data.paginatedData;
 
           // Format data sesuai kebutuhan tabel
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const formattedData: DataType[] = rawData.map((item: any) => ({
             key: item.no_surat_keluar, // Pastikan setiap baris memiliki key unik
             nomorSurat: item.no_surat_keluar,
@@ -84,11 +85,12 @@ const SuratKeluar: React.FC = () => {
       onOk: async () => {
         try {
           await axios.delete(
-            `https://belajar-backend-2ya9omyb5-arafie2603s-projects.vercel.app/api/surat-keluar/${nomorSurat}`
+            `https://belajar-backend-ten.vercel.app/api/surat-keluar/${nomorSurat}`
           );
 
           message.success('Surat berhasil dihapus!');
           setData((prevData) => prevData.filter((item) => item.key !== nomorSurat));
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
           message.error('Gagal menghapus surat!');
         }
