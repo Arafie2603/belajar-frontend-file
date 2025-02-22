@@ -1,96 +1,315 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Breadcrumb, Layout, theme, Spin, Table, Button, Modal, message } from 'antd';
-import type { TableProps } from 'antd';
-
-interface DataType {
-  key: string;
-  nomorSurat: string;
-  tanggalSurat: string;
-  perihal: string;
-  tujuanSurat: string;
-}
+import {
+  Layout,
+  Table,
+  Button,
+  Modal,
+  message,
+  Card,
+  Typography,
+  Form,
+  Input,
+  DatePicker,
+  Space,
+  Tooltip,
+  Badge,
+  Upload,
+  Alert
+} from 'antd';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  InboxOutlined,
+  FileTextOutlined,
+  SearchOutlined
+} from '@ant-design/icons';
+import type { UploadProps } from 'antd';
+import CKEditorComponent from '../components/CKEditor';
+import { useSuratCache } from '../hooks/useSuratCache';
+import { useAuth } from '../hooks/useAuth';
 
 const { Content } = Layout;
+const { Title, Text } = Typography;
+const { Dragger } = Upload;
+
+interface DataType {
+  id: string;
+  surat_nomor: string;
+  tanggal: string;
+  tempat_surat: string;
+  lampiran: string;
+  isi_surat: string;
+  penerima: string;
+  pengirim: string;
+  jabatan_pengirim: string;
+  gambar: string;
+  keterangan_gambar: string;
+  sifat_surat: string;
+}
+
+interface InputFormProps {
+  visible: boolean;
+  onCancel: () => void;
+  onSubmit: (values: any) => void;
+  submitting: boolean;
+}
+
+const InputForm: React.FC<InputFormProps> = ({ visible, onCancel, onSubmit, submitting }) => {
+  const [form] = Form.useForm();
+  const [editorData, setEditorData] = useState('');
+  const [fileList, setFileList] = useState<any[]>([]);
+
+  const uploadProps: UploadProps = {
+    name: "gambar",
+    multiple: false,
+    accept: ".pdf,.jpg,.png",
+    maxCount: 1,
+    fileList: fileList,
+    onChange(info) {
+      setFileList(info.fileList);
+    },
+    beforeUpload: (file) => {
+      const isValidType = file.type === "application/pdf" || file.type.startsWith("image/");
+      const isValidSize = file.size / 1024 / 1024 < 5;
+
+      if (!isValidType) {
+        message.error("Hanya mendukung file PDF dan gambar!");
+        return Upload.LIST_IGNORE;
+      }
+
+      if (!isValidSize) {
+        message.error("Ukuran file tidak boleh lebih dari 5MB!");
+        return Upload.LIST_IGNORE;
+      }
+
+      return false;
+    },
+  };
+
+  const handleSubmit = (values: any) => {
+    const formData = new FormData();
+    Object.entries(values).forEach(([key, value]: [string, any]) => {
+      if (key === 'tanggal') {
+        formData.append(key, value.format('YYYY-MM-DD'));
+      } else {
+        formData.append(key, value);
+      }
+    });
+
+    formData.append('isi_surat', editorData);
+
+    if (fileList.length > 0 && fileList[0].originFileObj) {
+      formData.append('gambar', fileList[0].originFileObj);
+    }
+
+    onSubmit(formData);
+  };
+
+  return (
+    <Modal
+      title={
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <FileTextOutlined style={{ color: '#1890ff' }} />
+          <span>Input Surat Keluar Baru</span>
+        </div>
+      }
+      open={visible}
+      onCancel={() => {
+        form.resetFields();
+        setEditorData('');
+        setFileList([]);
+        onCancel();
+      }}
+      width={800}
+      footer={[
+        <Button key="back" onClick={onCancel}>
+          Batal
+        </Button>,
+        <Button
+          key="submit"
+          type="primary"
+          loading={submitting}
+          onClick={() => form.submit()}
+        >
+          Simpan
+        </Button>,
+      ]}
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={handleSubmit}
+      >
+        <Form.Item
+          name="tanggal"
+          label="Tanggal Surat"
+          rules={[{ required: true, message: 'Mohon pilih tanggal surat!' }]}
+        >
+          <DatePicker style={{ width: '100%' }} />
+        </Form.Item>
+
+        <Form.Item
+          name="lampiran"
+          label="Lampiran"
+          rules={[{ required: true, message: 'Mohon isi lampiran surat!' }]}
+        >
+          <Input placeholder="Masukkan lampiran surat" />
+        </Form.Item>
+
+        <Form.Item
+          label="Isi Surat"
+          required
+        >
+          <CKEditorComponent value={editorData} onChange={setEditorData} />
+        </Form.Item>
+
+        <Form.Item
+          name="penerima"
+          label="Penerima"
+          rules={[{ required: true, message: 'Mohon isi penerima surat!' }]}
+        >
+          <Input placeholder="Masukkan penerima surat" />
+        </Form.Item>
+
+        <Form.Item
+          name="pengirim"
+          label="Pengirim"
+          rules={[{ required: true, message: 'Mohon isi pengirim surat!' }]}
+        >
+          <Input placeholder="Masukkan pengirim surat" />
+        </Form.Item>
+
+        <Form.Item
+          name="jabatan_pengirim"
+          label="Jabatan Pengirim"
+          rules={[{ required: true, message: 'Mohon isi jabatan pengirim surat!' }]}
+        >
+          <Input placeholder="Masukkan jabatan pengirim surat" />
+        </Form.Item>
+
+        <Form.Item
+          name="gambar"
+          label="Gambar"
+        >
+          <Dragger {...uploadProps}>
+            <p className="ant-upload-drag-icon">
+              <InboxOutlined />
+            </p>
+            <p className="ant-upload-text">Klik atau seret file ke area ini untuk mengunggah</p>
+            <p className="ant-upload-hint">
+              Mendukung file PDF atau gambar. Maksimal ukuran file 5MB.
+            </p>
+          </Dragger>
+        </Form.Item>
+
+        <Form.Item
+          name="keterangan_gambar"
+          label="Keterangan Gambar"
+          rules={[{ required: true, message: 'Mohon isi keterangan gambar!' }]}
+        >
+          <Input placeholder="Masukkan keterangan gambar" />
+        </Form.Item>
+
+        <Form.Item
+          name="sifat_surat"
+          label="Sifat Surat"
+          rules={[{ required: true, message: 'Mohon isi sifat surat!' }]}
+        >
+          <Input placeholder="Masukkan sifat surat" />
+        </Form.Item>
+
+        <Form.Item
+          name="tempat_surat"
+          label="Tempat Surat"
+          rules={[{ required: true, message: 'Mohon isi tempat surat!' }]}
+        >
+          <Input placeholder="Masukkan tempat surat" />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+};
 
 const SuratKeluar: React.FC = () => {
-  const {
-    token: { colorBgContainer, borderRadiusLG },
-  } = theme.useToken();
+  const { isAuthenticated, token } = useAuth();
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://belajar-backend-6x1plp4je-arafie2603s-projects.vercel.app/';
 
-  const [data, setData] = useState<DataType[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const { data, loading, error, refreshData } = useSuratCache(BASE_URL);
 
+  // Add authentication check
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const BASE_URL = import.meta.env.VITE_BASE_URL;
-        const response = await axios.get(
-          `${BASE_URL}api/surat-keluar`
-        );
+    if (!isAuthenticated) {
+      // Redirect to login page
+      window.location.href = '/';
+    }
+  }, [isAuthenticated]);
 
-        if (response.status === 200 && response.data.data.paginatedData) {
-          const rawData = response.data.data.paginatedData;
 
-          // Format data sesuai kebutuhan tabel
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const formattedData: DataType[] = rawData.map((item: any) => ({
-            key: item.no_surat_keluar, // Pastikan setiap baris memiliki key unik
-            nomorSurat: item.no_surat_keluar,
-            tanggalSurat: new Date(item.tanggal).toLocaleDateString('id-ID'),
-            perihal: item.perihal,
-            tujuanSurat: item.tujuan,
-            scanSurat: item.scan_surat,
-          }));          
-          setData(formattedData);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []); // Dependensi kosong agar hanya dipanggil sekali saat mount
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return (
+      <div>
+        <Alert
+          message="Error"
+          description={error}
+          type="error"
+          showIcon
+        />
+        <Button onClick={refreshData}>Coba lagi</Button>
+      </div>
+    );
+  }
 
   const handleDetail = (record: DataType) => {
     Modal.info({
       title: 'Detail Surat Keluar',
       content: (
         <div>
-          <p><strong>Nomor Surat:</strong> {record.nomorSurat}</p>
-          <p><strong>Tanggal:</strong> {record.tanggalSurat}</p>
-          <p><strong>Perihal:</strong> {record.perihal}</p>
-          <p><strong>Tujuan:</strong> {record.tujuanSurat}</p>
-          <p>
-            <strong>Dokumen:</strong>{' '}
-            <a href={record.nomorSurat} target="_blank" rel="noopener noreferrer">
-              Lihat Dokumen
-            </a>
-          </p>
+          <p><strong>Nomor Surat:</strong> {record.surat_nomor}</p>
+          <p><strong>Tanggal:</strong> {record.tanggal}</p>
+          <p><strong>Pengirim:</strong> {record.pengirim}</p>
+          <p><strong>Penerima:</strong> {record.penerima}</p>
+          <p><strong>Tempat:</strong> {record.tempat_surat}</p>
+          <p><strong>Sifat Surat:</strong> {record.sifat_surat}</p>
+          {record.id && (
+            <div>
+              <p><strong>Isi Surat:</strong></p>
+              <div dangerouslySetInnerHTML={{ __html: record.id }} />
+            </div>
+          )}
         </div>
       ),
-      onOk() { },
+      width: 600,
     });
   };
 
-  // Fungsi untuk Menghapus Surat
-  const handleDelete = (nomorSurat: string) => {
+  const handleDelete = async (id: string) => {
     Modal.confirm({
-      title: 'Apakah Anda yakin ingin menghapus surat ini?',
-      content: 'Tindakan ini tidak dapat dibatalkan.',
+      title: 'Konfirmasi Penghapusan',
+      content: 'Apakah Anda yakin ingin menghapus surat ini?',
       okText: 'Ya, Hapus',
       okType: 'danger',
       cancelText: 'Batal',
       onOk: async () => {
         try {
-          await axios.delete(
-            `https://belajar-backend-ten.vercel.app/api/surat-keluar/${nomorSurat}`
-          );
-
+          await axios.delete(`${BASE_URL}api/surat-keluar/${id}`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
           message.success('Surat berhasil dihapus!');
-          setData((prevData) => prevData.filter((item) => item.key !== nomorSurat));
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          refreshData(); // Use the cache refresh function
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
           message.error('Gagal menghapus surat!');
         }
@@ -98,63 +317,157 @@ const SuratKeluar: React.FC = () => {
     });
   };
 
-  const columns: TableProps<DataType>['columns'] = [
+  const handleSubmit = async (formData: FormData) => {
+    setSubmitting(true);
+    try {
+      const response = await axios.post(`${BASE_URL}api/surat-keluar`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}`
+        },
+      });
+
+      if (response.status === 201 || response.status === 200) {
+        message.success('Surat keluar berhasil ditambahkan!');
+        setIsModalVisible(false);
+        refreshData(); // Use the cache refresh function
+      }
+    } catch (error: any) {
+      message.error(
+        'Gagal menambahkan surat keluar: ' +
+        (error.response?.data?.message || error.message)
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  // Fungsi helper untuk type checking
+  const isSearchableValue = (value: unknown): value is string => {
+    return typeof value === 'string' || typeof value === 'number';
+  };
+
+
+  const filteredData = (data as DataType[]).filter((item) => {
+    return Object.values(item).some((val) => {
+      if (isSearchableValue(val)) {
+        return val.toString().toLowerCase().includes(searchText.toLowerCase());
+      }
+      return false;
+    });
+  });
+
+
+  const columns = [
     {
       title: 'Nomor Surat',
-      dataIndex: 'nomorSurat',
-      key: 'nomorSurat',
+      dataIndex: 'surat_nomor',
+      key: 'surat_nomor',
+      align: 'center' as const,
     },
     {
       title: 'Tanggal Surat',
-      dataIndex: 'tanggalSurat',
-      key: 'tanggalSurat',
+      dataIndex: 'tanggal',
+      key: 'tanggal',
+      align: 'center' as const,
     },
     {
-      title: 'Perihal',
-      dataIndex: 'perihal',
-      key: 'perihal',
+      title: 'Pengirim',
+      dataIndex: 'pengirim',
+      key: 'pengirim',
+      align: 'center' as const,
     },
     {
-      title: 'Tujuan Surat',
-      key: 'tujuanSurat',
-      dataIndex: 'tujuanSurat',
+      title: 'Penerima',
+      dataIndex: 'penerima',
+      key: 'penerima',
+      align: 'center' as const,
     },
     {
-      title: 'Kelola',
-      key: 'kelola',
-      render: (_, record) => (
-        <>
-          <Button type="primary" onClick={() => handleDetail(record)} style={{ marginRight: 8 }}>
-            Detail
-          </Button>
-          <Button type="primary" danger onClick={() => handleDelete(record.key)}>
-            Delete
-          </Button>
-        </>
+      title: 'Aksi',
+      key: 'aksi',
+      align: 'center' as const,
+      render: (_: unknown, record: DataType) => (
+        <Space>
+          <Tooltip title="Lihat Detail">
+            <Button
+              type="primary"
+              icon={<EyeOutlined />}
+              onClick={() => handleDetail(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Edit">
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => message.info('Fitur edit akan segera hadir!')}
+            />
+          </Tooltip>
+          <Tooltip title="Hapus">
+            <Button
+              type="primary"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDelete(record.id)}
+            />
+          </Tooltip>
+        </Space>
       ),
     },
   ];
 
   return (
-    <Content style={{ margin: '0 16px' }}>
-      <Breadcrumb
-        items={[{ title: 'Surat Keluar' }]}
-        style={{ margin: '16px 0', fontSize: '30px', fontWeight: 'bold' }}
-      ></Breadcrumb>
-      <div
-        style={{
-          padding: 24,
-          minHeight: 360,
-          background: colorBgContainer,
-          borderRadius: borderRadiusLG,
-        }}
-      >
-        {loading ? (
-          <Spin size="large" style={{ display: 'block', textAlign: 'center', marginTop: 50 }} />
-        ) : (
-          <Table<DataType> columns={columns} dataSource={data} pagination={{ pageSize: 5 }} />
-        )}
-      </div>
+    <Content style={{ margin: '16px' }}>
+      <Card bordered={false} className="shadow-sm">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <div>
+            <Title level={2} style={{ margin: 0 }}>
+              <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+              Surat Keluar
+            </Title>
+            <Text type="secondary">Kelola semua surat keluar Anda di sini</Text>
+          </div>
+          <Badge count={data.length}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setIsModalVisible(true)}
+              size="large"
+            >
+              Tambah Surat
+            </Button>
+          </Badge>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <Input
+            placeholder="Cari surat..."
+            prefix={<SearchOutlined />}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 300 }}
+            allowClear
+          />
+        </div>
+
+        <Table
+          columns={columns}
+          dataSource={filteredData}
+          rowKey="id"
+          loading={loading}
+          pagination={{
+            pageSize: 10,
+            showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} surat`,
+            showSizeChanger: true,
+            showQuickJumper: true,
+          }}
+          scroll={{ x: 'max-content' }}
+        />
+      </Card>
+
+      <InputForm
+        visible={isModalVisible}
+        onCancel={() => setIsModalVisible(false)}
+        onSubmit={handleSubmit}
+        submitting={submitting}
+      />
     </Content>
   );
 };
