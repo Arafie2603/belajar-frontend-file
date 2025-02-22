@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import React, { Suspense } from 'react'
+import { Suspense } from 'react'
 import './index.css'
 import AppRoutes from './route/routes'
 import { RouterProvider } from 'react-router-dom'

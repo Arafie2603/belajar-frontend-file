@@ -1,61 +1,88 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../hooks/useAuth';
 
-// Types
-interface LoginFormValues {
+interface LoginValues {
   nomor_identitas: string;
   password: string;
-  remember?: boolean;
+  remember: boolean;
 }
 
-interface LoginFormValues {
+
+interface LoginValues {
   nomor_identitas: string;
   password: string;
-  remember?: boolean;
+  remember: boolean;
 }
-
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const [error, setError] = useState<string>('');
+  const { login } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const onFinish = async (values: LoginFormValues) => {
+  const onFinish = async (values: LoginValues) => {
     try {
       setLoading(true);
       setError('');
-      const BASE_URL = import.meta.env.VITE_BASE_URL;
+      const BASE_URL = import.meta.env.VITE_BASE_URL || "https://belajar-backend-d3iolm3c5-arafie2603s-projects.vercel.app/";
+
+      console.log('Attempting login with:', {
+        nomor_identitas: values.nomor_identitas,
+        remember: values.remember
+      });
+
       const response = await axios.post(`${BASE_URL}api/users/login`, {
         nomor_identitas: values.nomor_identitas,
         password: values.password
       });
 
-      if (response.data.status === 200) {
-        // Store the JWT token
-        localStorage.setItem('token', response.data.data.token);
+      console.log('Full API Response:', response);
+      console.log('Response data structure:', {
+        hasData: !!response.data,
+        hasNestedData: !!response.data?.data,
+        hasToken: !!response.data?.data?.token,
+        tokenValue: response.data?.data?.token
+      });
 
-        // Store user data if needed
-        localStorage.setItem('user', JSON.stringify(response.data.data.user));
-
-        // Set up axios default headers for future requests
-        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.data.token}`;
-
-        // Redirect to dashboard or home page
-        navigate('/dashboard');
+      if (!response.data) {
+        throw new Error('Response data is empty');
       }
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
+
+      if (!response.data.data) {
+        throw new Error('Response data.data is empty');
+      }
+
+      if (!response.data.data.token) {
+        throw new Error('Token is missing in response');
+      }
+
+      const token = response.data.data.token;
+      console.log('Token found:', token.substring(0, 10) + '...');
+
+      await login(token);
+      console.log('Login successful, navigating...');
+      navigate('/dashboard/surat-keluar');
+    } catch (err) {
+      console.error('Detailed login error:', err);
+      if (axios.isAxiosError(err)) {
+        console.log('Axios error details:', {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message
+        });
+
+        setError(`Login gagal: ${err.response?.data?.message || 'Terjadi kesalahan'}`);
       } else {
-        setError('An error occurred during login. Please try again.');
+        setError((err as Error).message || 'Terjadi kesalahan pada server');
       }
-    }
-    finally {
+    } finally {
       setLoading(false);
     }
   };
 
+  // Your existing JSX remains the same
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -115,6 +142,7 @@ const Login: React.FC = () => {
                 id="remember"
                 name="remember"
                 type="checkbox"
+                value="true"
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label htmlFor="remember" className="ml-2 block text-sm text-gray-900">
