@@ -31,6 +31,8 @@ import { UploadProps, Select } from 'antd';
 import CKEditorComponent from '../components/CKEditor';
 import { useSuratCache } from '../hooks/useSuratCache';
 import { useAuth } from '../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -264,7 +266,9 @@ const SuratKeluar: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://belajar-backend-6x1plp4je-arafie2603s-projects.vercel.app/';
+  const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://api-efiling.vercel.app/';
+  const navigate = useNavigate();
+
 
   const { data, loading, error, refreshData } = useSuratCache(BASE_URL);
 
@@ -294,29 +298,6 @@ const SuratKeluar: React.FC = () => {
       </div>
     );
   }
-
-  const handleDetail = (record: DataType) => {
-    Modal.info({
-      title: 'Detail Surat Keluar',
-      content: (
-        <div>
-          <p><strong>Nomor Surat:</strong> {record.surat_nomor}</p>
-          <p><strong>Tanggal:</strong> {record.tanggal}</p>
-          <p><strong>Pengirim:</strong> {record.pengirim}</p>
-          <p><strong>Penerima:</strong> {record.penerima}</p>
-          <p><strong>Tempat:</strong> {record.tempat_surat}</p>
-          <p><strong>Sifat Surat:</strong> {record.sifat_surat}</p>
-          {record.id && (
-            <div>
-              <p><strong>Isi Surat:</strong></p>
-              <div dangerouslySetInnerHTML={{ __html: record.id }} />
-            </div>
-          )}
-        </div>
-      ),
-      width: 600,
-    });
-  };
 
   const handleDelete = async (id: string) => {
     Modal.confirm({
@@ -417,7 +398,7 @@ const SuratKeluar: React.FC = () => {
             <Button
               type="primary"
               icon={<EyeOutlined />}
-              onClick={() => handleDetail(record)}
+              onClick={() => navigate(`/dashboard/surat-keluar/${record.id}`)}
             />
           </Tooltip>
           <Tooltip title="Edit">

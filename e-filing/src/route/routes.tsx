@@ -2,6 +2,7 @@ import { lazy } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import DashboardLayout from '../layouts/Dashboard_Layout';
 import Login from '../pages/Login';
+import DetailSuratKeluar from '../pages/DetailSuratKeluar';
 
 
 const SuratKeluar = lazy(() => import('../pages/SuratKeluar'));
@@ -33,6 +34,10 @@ const AppRoutes = createBrowserRouter([
             {
                 path: 'surat-masuk/:no_surat_masuk',
                 element: <DetailSuratMasuk />,
+            },
+            {
+                path: 'surat-keluar/:id',
+                element: <DetailSuratKeluar />,
             },
         ],
     },
