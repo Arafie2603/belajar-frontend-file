@@ -36,7 +36,7 @@ const getMenuItems = (navigate: (path: string) => void): MenuItem[] => [
     getItem('Data Transaksi', 'sub1', <UserOutlined />, [
         getItem('Surat Masuk', '2', undefined, undefined, () => navigate('surat-masuk')),
         getItem('Surat Keluar', '3', undefined, undefined, () => navigate('surat-keluar')),
-        getItem('Notulen', '4'),
+        getItem('Notulen', '4', undefined, undefined, () => navigate('notulen')),
         getItem('Faktur', '5'),
     ]),
     getItem('Team', 'sub2', <TeamOutlined />, [

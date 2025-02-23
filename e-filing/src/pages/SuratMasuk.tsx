@@ -27,7 +27,12 @@ const SuratMasuk: React.FC = () => {
       try {
         const BASE_URL = import.meta.env.VITE_BASE_URL;
         const response = await axios.get(
-          `${BASE_URL}api/surat-masuk`
+          `${BASE_URL}api/surat-masuk`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+            "Content-Type": 'aplication/json',
+          }
+        }
         );
 
         if (response.status === 200 && response.data.data.paginatedData) {

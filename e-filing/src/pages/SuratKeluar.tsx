@@ -26,7 +26,12 @@ const SuratKeluar: React.FC = () => {
       try {
         const BASE_URL = import.meta.env.VITE_BASE_URL;
         const response = await axios.get(
-          `${BASE_URL}api/surat-keluar`
+          `${BASE_URL}api/surat-keluar`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+            "Content-Type": 'aplication/json',
+          }
+        }
         );
 
         if (response.status === 200 && response.data.data.paginatedData) {
@@ -36,11 +41,11 @@ const SuratKeluar: React.FC = () => {
           const formattedData: DataType[] = rawData.map((item: any) => ({
             key: item.no_surat_keluar, // Pastikan setiap baris memiliki key unik
             nomorSurat: item.no_surat_keluar,
-            tanggalSurat: new Date(item.tanggal).toLocaleDateString('id-ID'),
+            tanggalSurat: new Date(item.tanggal_surat).toLocaleDateString('id-ID'),
             perihal: item.perihal,
             tujuanSurat: item.tujuan,
             scanSurat: item.scan_surat,
-          }));          
+          }));
           setData(formattedData);
         }
       } catch (error) {
