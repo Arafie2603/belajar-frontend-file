@@ -63,7 +63,7 @@ const Login: React.FC = () => {
 
       await login(token);
       console.log('Login successful, navigating...');
-      navigate('/dashboard/surat-keluar');
+      navigate('/dashboard');
     } catch (err) {
       console.error('Detailed login error:', err);
       if (axios.isAxiosError(err)) {
