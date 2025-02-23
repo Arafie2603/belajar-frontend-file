@@ -1,22 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// hooks/useSuratMasuk.ts
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { storage } from '../utils/storage';
-
-interface SuratMasuk {
-    key: string;
-    nomorSurat: string;
-    tanggalSurat: string;
-    perihal: string;
-    tujuanSurat: string;
-    organisasi: string;
-    pengirim: string;
-    penerima: string;
-}
+import { SuratMasuk, SuratMasukResponse, PaginationMeta } from '../types/surat';
 
 interface CacheData {
     data: SuratMasuk[];
+    pagination: PaginationMeta;
     timestamp: number;
 }
 
@@ -28,6 +17,7 @@ export const useSuratMasuk = (baseUrl: string) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<number>(0);
+    const [pagination, setPagination] = useState<PaginationMeta | null>(null);
 
     const getCachedData = (): CacheData | null => {
         const cached = storage.get(CACHE_KEY);
@@ -35,9 +25,10 @@ export const useSuratMasuk = (baseUrl: string) => {
         return cached;
     };
 
-    const setCachedData = (data: SuratMasuk[]) => {
+    const setCachedData = (data: SuratMasuk[], pagination: PaginationMeta) => {
         const cacheData: CacheData = {
             data,
+            pagination,
             timestamp: Date.now()
         };
         storage.set(CACHE_KEY, cacheData);
@@ -45,6 +36,7 @@ export const useSuratMasuk = (baseUrl: string) => {
     };
 
     const fetchData = useCallback(async (forceFetch = false) => {
+        console.log('Fetching data with forceFetch:', forceFetch);
         const token = localStorage.getItem('token');
         
         if (!token) {
@@ -55,33 +47,32 @@ export const useSuratMasuk = (baseUrl: string) => {
 
         try {
             const cached = getCachedData();
+            console.log('Cached data:', cached);
 
             if (!forceFetch && cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+                console.log('Using cached data');
                 setData(cached.data);
+                setPagination(cached.pagination);
                 setLoading(false);
                 return;
             }
 
-            const response = await axios.get(`${baseUrl}api/surat-masuk`, {
+            const response = await axios.get<SuratMasukResponse>(`${baseUrl}api/surat-masuk`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
             });
+            
+            console.log('API Response:', response.data);
 
             if (response.status === 200 && response.data.data.paginatedData) {
-                const formattedData: SuratMasuk[] = response.data.data.paginatedData.map((item: any) => ({
-                    key: item.no_surat_masuk,
-                    nomorSurat: item.no_surat_masuk,
-                    tanggalSurat: new Date(item.tanggal).toLocaleDateString('id-ID'),
-                    perihal: item.perihal,
-                    tujuanSurat: item.tujuan,
-                    organisasi: item.organisasi,
-                    pengirim: item.pengirim,
-                    penerima: item.penerima
-                }));
-
-                setCachedData(formattedData);
-                setData(formattedData);
+                const newData = response.data.data.paginatedData;
+                const newMeta = response.data.data.meta;
+                
+                console.log('Setting new data:', newData);
+                setData(newData);
+                setPagination(newMeta);
+                setCachedData(newData, newMeta);
                 setError(null);
             }
         } catch (error) {
@@ -97,34 +88,71 @@ export const useSuratMasuk = (baseUrl: string) => {
                 setError('Terjadi kesalahan saat mengambil data');
             }
             
-            // Use cache as fallback if available
             const cached = getCachedData();
             if (cached) {
                 setData(cached.data);
+                setPagination(cached.pagination);
             }
         } finally {
             setLoading(false);
         }
     }, [baseUrl]);
 
-    const deleteSurat = useCallback(async (nomorSurat: string) => {
+    const addSurat = useCallback(async (formData: FormData) => {
         const token = localStorage.getItem('token');
         
         if (!token) {
-            setError('Token tidak ditemukan');
-            return;
+            throw new Error('Token tidak ditemukan');
         }
 
         try {
-            await axios.delete(`${baseUrl}api/surat-masuk/${nomorSurat}`, {
+            console.log('Sending form data:', Object.fromEntries(formData));
+            const response = await axios.post(`${baseUrl}api/surat-masuk`, formData, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            console.log('Add surat response:', response.data);
+
+            if (response.status === 200) {
+                // Clear cache
+                storage.remove(CACHE_KEY);
+                // Add small delay before fetching new data
+                await new Promise(resolve => setTimeout(resolve, 500));
+                // Force fetch new data
+                await fetchData(true);
+                return true;
+            }
+        } catch (error) {
+            console.error('Add surat error:', error);
+            if (axios.isAxiosError(error)) {
+                throw new Error(error.response?.data?.message || 'Gagal menambahkan surat');
+            }
+            throw new Error('Terjadi kesalahan saat menambahkan surat');
+        }
+    }, [baseUrl, fetchData]);
+
+    const deleteSurat = useCallback(async (noSurat: string) => {
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+            throw new Error('Token tidak ditemukan');
+        }
+
+        try {
+            const response = await axios.delete(`${baseUrl}api/surat-masuk/${noSurat}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
             });
-            // Invalidate cache and fetch fresh data
-            storage.remove(CACHE_KEY);
-            await fetchData(true);
-            return true;
+
+            if (response.status === 200) {
+                storage.remove(CACHE_KEY);
+                await fetchData(true);
+                return true;
+            }
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 throw new Error(error.response?.data?.message || 'Gagal menghapus surat');
@@ -133,51 +161,34 @@ export const useSuratMasuk = (baseUrl: string) => {
         }
     }, [baseUrl, fetchData]);
 
-    const addSurat = useCallback(async (values: Omit<SuratMasuk, 'key'>) => {
-        const token = localStorage.getItem('token');
-        
-        if (!token) {
-            setError('Token tidak ditemukan');
-            return;
-        }
-
-        try {
-            await axios.post(`${baseUrl}api/surat-masuk`, values, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            // Invalidate cache and fetch fresh data
-            storage.remove(CACHE_KEY);
-            await fetchData(true);
-            return true;
-        } catch (error) {
-            if (axios.isAxiosError(error)) {
-                throw new Error(error.response?.data?.message || 'Gagal menambahkan surat');
-            }
-            throw new Error('Terjadi kesalahan saat menambahkan surat');
-        }
-    }, [baseUrl, fetchData]);
-
-    // Initial fetch
     useEffect(() => {
-        fetchData();
+        console.log('Initial fetch triggered');
+        fetchData(true); // Force fetch on initial load
     }, [fetchData]);
 
-    // Periodic check for updates
     useEffect(() => {
+        console.log('Setting up periodic fetch');
         const interval = setInterval(() => {
             fetchData(true);
         }, CACHE_DURATION);
 
-        return () => clearInterval(interval);
+        return () => {
+            console.log('Cleaning up interval');
+            clearInterval(interval);
+        };
     }, [fetchData]);
+
+    // Monitor data changes
+    useEffect(() => {
+        console.log('Current data state:', data);
+    }, [data]);
 
     return {
         data,
         loading,
         error,
         lastUpdated,
+        pagination,
         refreshData: () => fetchData(true),
         deleteSurat,
         addSurat

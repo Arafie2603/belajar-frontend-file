@@ -2,18 +2,20 @@ import { useState, useEffect, useRef } from "react";
 import { Card, Typography, Modal, Image, Spin, Alert, Button, Space, Badge, Divider } from "antd";
 import { useParams } from "react-router-dom";
 import { Document, Page } from 'react-pdf';
+import { useNavigate } from 'react-router-dom';
 import "../pdfworker";
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
-import { 
-    FileTextOutlined, 
-    CalendarOutlined, 
-    UserOutlined, 
-    AimOutlined, 
-    MailOutlined, 
-    EyeOutlined, 
+import {
+    FileTextOutlined,
+    CalendarOutlined,
+    UserOutlined,
+    AimOutlined,
+    MailOutlined,
+    EyeOutlined,
     DownloadOutlined,
-    NumberOutlined
+    NumberOutlined,
+    ArrowLeftOutlined
 } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
@@ -43,7 +45,7 @@ const extractFilename = (minioUrl: string | undefined): string | null => {
 
 const generateViewUrl = (filename: string | null): string | null => {
     if (!filename) return null;
-    return `https://belajar-backend-d3iolm3c5-arafie2603s-projects.vercel.app/api/files/view/${filename}`;
+    return `https://api-efiling.vercel.app/api/files/view/${filename}`;
 };
 
 // Enhanced DetailItem component for consistent styling
@@ -54,7 +56,7 @@ interface DetailItemProps {
 }
 
 const DetailItem: React.FC<DetailItemProps> = ({ icon, label, value }) => (
-    
+
     <div style={{
         padding: '16px',
         backgroundColor: '#f5f5f5',
@@ -66,7 +68,7 @@ const DetailItem: React.FC<DetailItemProps> = ({ icon, label, value }) => (
         alignItems: 'center',
         width: "100%"
     }}
-    className="hover:bg-gray-100"
+        className="hover:bg-gray-100"
     >
         <div style={{ color: '#1890ff', fontSize: '20px', marginRight: '16px' }}>
             {icon}
@@ -150,14 +152,14 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ filename }) => {
                     <div>
                         <Text strong>Page {pageNumber} of {numPages || 0}</Text>
                         <div style={{ marginTop: '10px' }}>
-                            <Button 
+                            <Button
                                 onClick={previousPage}
                                 disabled={pageNumber <= 1}
                                 style={{ marginRight: '8px' }}
                             >
                                 Previous
                             </Button>
-                            <Button 
+                            <Button
                                 onClick={nextPage}
                                 disabled={pageNumber >= (numPages || 0)}
                             >
@@ -166,7 +168,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ filename }) => {
                         </div>
                     </div>
                     {viewUrl && (
-                        <Button 
+                        <Button
                             type="primary"
                             href={viewUrl}
                             target="_blank"
@@ -229,12 +231,14 @@ const DetailSuratKeluar: React.FC = () => {
     const [isPDF, setIsPDF] = useState<boolean>(false);
     const [error, setError] = useState<string>("");
     const [filename, setFilename] = useState<string | null>(null);
+    const navigate = useNavigate();
 
-    const { no_surat_masuk } = useParams<{ no_surat_masuk: string }>();
-    const API_URL = "https://belajar-backend-6x1plp4je-arafie2603s-projects.vercel.app/";
+    const { id } = useParams<{ id: string }>();
+    const API_URL = "https://api-efiling.vercel.app/";
+    const token = localStorage.getItem('token');
 
     useEffect(() => {
-        if (!no_surat_masuk) {
+        if (!id) {
             setError("Nomor surat keluar tidak ditemukan");
             setIsLoading(false);
             return;
@@ -242,8 +246,22 @@ const DetailSuratKeluar: React.FC = () => {
 
         const fetchData = async () => {
             try {
-                const response = await fetch(`${API_URL}/api/surat-kelaur/${no_surat_masuk}`);
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                // Tambahkan header Authorization
+                const response = await fetch(`${API_URL}api/surat-keluar/${id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        // Handle unauthorized
+                        window.location.href = '/';
+                        return;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
 
                 const data = await response.json();
                 if (data.data) {
@@ -263,13 +281,13 @@ const DetailSuratKeluar: React.FC = () => {
         };
 
         fetchData();
-    }, [no_surat_masuk, API_URL]);
+    }, [id, API_URL, token]);
 
     const viewUrl = filename ? generateViewUrl(filename) : null;
 
     if (isLoading) {
         return (
-            <div style={{ 
+            <div style={{
                 height: '100vh',
                 display: 'flex',
                 flexDirection: 'column',
@@ -285,7 +303,7 @@ const DetailSuratKeluar: React.FC = () => {
 
     if (error || !surat) {
         return (
-            <div style={{ 
+            <div style={{
                 height: '100vh',
                 display: 'flex',
                 justifyContent: 'center',
@@ -303,12 +321,12 @@ const DetailSuratKeluar: React.FC = () => {
     }
 
     return (
-        <div style={{ 
+        <div style={{
             minHeight: '100vh',
             backgroundColor: '#f0f2f5',
             padding: '32px'
         }}>
-            <Card 
+            <Card
                 style={{
                     maxWidth: '100%',
                     margin: '0 auto',
@@ -317,20 +335,36 @@ const DetailSuratKeluar: React.FC = () => {
                 }}
             >
                 <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                    <Badge.Ribbon text="Surat Masuk" color="blue">
+                    <Badge.Ribbon text="Surat Keluar" color="blue">
                         <Title level={2} style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <FileTextOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
-                            Detail Surat Masuk
+                            Detail Surat Keluar
                         </Title>
                     </Badge.Ribbon>
                 </div>
+
+                <Button
+                    icon={<ArrowLeftOutlined />}
+                    onClick={() => navigate('/dashboard/surat-keluar')}
+                    style={{
+                        marginBottom: '16px',
+                        borderRadius: '50%',
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: 'none',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}
+                />
 
                 <DetailItem
                     icon={<NumberOutlined />}
                     label="Nomor Surat"
                     value={surat.surat_nomor}
                 />
-                
+
                 <DetailItem
                     icon={<CalendarOutlined />}
                     label="Tanggal"
@@ -406,7 +440,7 @@ const DetailSuratKeluar: React.FC = () => {
                 width="50%"
                 style={{ top: 20 }}
                 styles={{
-                    body: { 
+                    body: {
                         padding: '24px',
                         maxHeight: '80vh',
                         overflow: 'auto',

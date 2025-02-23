@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-// components/SuratMasuk/index.tsx
 import React, { useState } from 'react';
 import { Layout, Table, Button, Modal, Card, Typography, Input, Space, Tooltip, Badge, message } from 'antd';
 import { 
@@ -12,9 +11,10 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useSuratMasuk } from '../hooks/useSuratMasukCache';
-import { InputForm } from '../components/inputForm';
-import type { SuratMasuk as SuratMasukType, SuratFormValues } from '../types/surat';
+import { InputForm } from '../components/InputForm';
+import type { SuratMasuk, SuratFormValues } from '../types/surat';
 import { ColumnsType } from 'antd/es/table';
+import dayjs from 'dayjs';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -24,16 +24,18 @@ const SuratMasukPage: React.FC = () => {
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [searchText, setSearchText] = useState('');
     
-    const BASE_URL = import.meta.env.VITE_BASE_URL || "https://belajar-backend-d3iolm3c5-arafie2603s-projects.vercel.app/";
+    const BASE_URL = import.meta.env.VITE_BASE_URL || "https://api-efiling.vercel.app/";
     const { 
         data, 
         loading, 
         error, 
         deleteSurat,
-        addSurat 
+        addSurat,
+        refreshData,
+        pagination
     } = useSuratMasuk(BASE_URL);
 
-    const handleDelete = (nomorSurat: string) => {
+    const handleDelete = (noSurat: string) => {
         Modal.confirm({
             title: 'Konfirmasi Penghapusan',
             content: 'Apakah Anda yakin ingin menghapus surat ini?',
@@ -42,7 +44,7 @@ const SuratMasukPage: React.FC = () => {
             cancelText: 'Batal',
             onOk: async () => {
                 try {
-                    await deleteSurat(nomorSurat);
+                    await deleteSurat(noSurat);
                     message.success('Surat berhasil dihapus!');
                 } catch (err) {
                     message.error('Gagal menghapus surat!');
@@ -50,33 +52,55 @@ const SuratMasukPage: React.FC = () => {
             },
         });
     };
-
     const handleSubmit = async (values: SuratFormValues) => {
         try {
-            const formattedValues = {
-                ...values,
-                tanggalSurat: values.tanggalSurat.format('YYYY-MM-DD')
-            };
-            await addSurat(formattedValues);
+            const formData = new FormData();
+            
+            // Handle date fields
+            formData.append('tanggal', values.tanggal.format('YYYY-MM-DD'));
+            formData.append('expired_data', values.expired_data.format('YYYY-MM-DD'));
+            
+            // Handle file upload
+            if (values.scan_surat instanceof File) {
+                formData.append('scan_surat', values.scan_surat);
+            }
+            
+            // Handle other fields
+            Object.entries(values).forEach(([key, value]) => {
+                if (
+                    value !== undefined && 
+                    key !== 'tanggal' && 
+                    key !== 'expired_data' && 
+                    key !== 'scan_surat'
+                ) {
+                    formData.append(key, String(value));
+                }
+            });
+    
+            await addSurat(formData);
             message.success('Surat berhasil ditambahkan!');
             setIsModalVisible(false);
+            // Explicitly refresh data after successful submission
+            await refreshData();
         } catch (err) {
+            console.error('Error submitting form:', err);
             message.error('Gagal menambahkan surat!');
         }
     };
 
-    const columns: ColumnsType<SuratMasukType> = [
+    const columns: ColumnsType<SuratMasuk> = [
         {
             title: 'Nomor Surat',
-            dataIndex: 'nomorSurat',
-            key: 'nomorSurat',
+            dataIndex: 'no_surat_masuk',
+            key: 'no_surat_masuk',
             width: 150,
         },
         {
             title: 'Tanggal',
-            dataIndex: 'tanggalSurat',
-            key: 'tanggalSurat',
+            dataIndex: 'tanggal',
+            key: 'tanggal',
             width: 120,
+            render: (text: string) => dayjs(text).format('DD/MM/YYYY'),
         },
         {
             title: 'Perihal',
@@ -85,15 +109,15 @@ const SuratMasukPage: React.FC = () => {
             width: 200,
         },
         {
-            title: 'Organisasi',
-            dataIndex: 'organisasi',
-            key: 'organisasi',
+            title: 'Tujuan',
+            dataIndex: 'tujuan',
+            key: 'tujuan',
             width: 150,
         },
         {
-            title: 'Tujuan',
-            dataIndex: 'tujuanSurat',
-            key: 'tujuanSurat',
+            title: 'Organisasi',
+            dataIndex: 'organisasi',
+            key: 'organisasi',
             width: 150,
         },
         {
@@ -113,13 +137,13 @@ const SuratMasukPage: React.FC = () => {
             key: 'action',
             fixed: 'right' as const,
             width: 150,
-            render: (_: unknown, record: SuratMasukType) => (
+            render: (_: unknown, record: SuratMasuk) => (
                 <Space>
                     <Tooltip title="Lihat Detail">
                         <Button
                             type="primary"
                             icon={<EyeOutlined />}
-                            onClick={() => navigate(`/dashboard/surat-masuk/${record.nomorSurat}`)}
+                            onClick={() => navigate(`/dashboard/surat-masuk/${record.no_surat_masuk}`)}
                         />
                     </Tooltip>
                     <Tooltip title="Edit">
@@ -133,7 +157,7 @@ const SuratMasukPage: React.FC = () => {
                             type="primary"
                             danger
                             icon={<DeleteOutlined />}
-                            onClick={() => handleDelete(record.nomorSurat)}
+                            onClick={() => handleDelete(record.no_surat_masuk)}
                         />
                     </Tooltip>
                 </Space>
@@ -141,11 +165,11 @@ const SuratMasukPage: React.FC = () => {
         },
     ];
 
-    const filteredData = data.filter(item =>
+    const filteredData = Array.isArray(data) ? data.filter(item =>
         Object.values(item).some(val =>
-            val.toString().toLowerCase().includes(searchText.toLowerCase())
+            val?.toString().toLowerCase().includes(searchText.toLowerCase())
         )
-    );
+    ) : [];
 
     if (error) {
         return (
@@ -166,7 +190,7 @@ const SuratMasukPage: React.FC = () => {
                         </Title>
                         <Text type="secondary">Kelola semua surat masuk Anda di sini</Text>
                     </div>
-                    <Badge count={data.length}>
+                    <Badge count={pagination?.totalItems || 0}>
                         <Button
                             type="primary"
                             icon={<PlusOutlined />}
@@ -187,12 +211,15 @@ const SuratMasukPage: React.FC = () => {
                     />
                 </div>
 
-                <Table<SuratMasukType>
+                <Table<SuratMasuk>
                     columns={columns}
                     dataSource={filteredData}
                     loading={loading}
+                    rowKey="no_surat_masuk"
                     pagination={{
-                        pageSize: 10,
+                        current: pagination?.currentPage,
+                        pageSize: pagination?.itemsPerPage,
+                        total: pagination?.totalItems,
                         showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} surat`,
                         showSizeChanger: true,
                         showQuickJumper: true,

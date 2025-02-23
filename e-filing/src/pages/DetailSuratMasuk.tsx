@@ -38,7 +38,7 @@ const extractFilename = (minioUrl: string | undefined): string | null => {
 
 const generateViewUrl = (filename: string | null): string | null => {
     if (!filename) return null;
-    return `https://belajar-backend-d3iolm3c5-arafie2603s-projects.vercel.app/api/files/view/${filename}`;
+    return `https://api-efiling.vercel.app/api/files/view/${filename}`;
 };
 
 // Enhanced DetailItem component for consistent styling
@@ -225,7 +225,7 @@ const DetailSuratMasuk: React.FC = () => {
     const [filename, setFilename] = useState<string | null>(null);
 
     const { no_surat_masuk } = useParams<{ no_surat_masuk: string }>();
-    const API_URL = "https://belajar-backend-ten.vercel.app";
+    const API_URL = "https://api-efiling.vercel.app";
 
     useEffect(() => {
         if (!no_surat_masuk) {

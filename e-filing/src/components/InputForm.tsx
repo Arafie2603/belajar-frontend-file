@@ -1,12 +1,46 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-// components/SuratMasuk/InputForm.tsx
-import React from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React, { useState } from 'react';
 import { Modal, Form, Input, DatePicker, Space, Button, Upload, message } from 'antd';
 import { InboxOutlined, FileTextOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
-import type { SuratFormValues } from '../types/surat';
+import type { RcFile, UploadFile } from 'antd/es/upload/interface';
+import type { Dayjs } from 'dayjs';
+import Dragger from 'antd/es/upload/Dragger';
 
-const { Dragger } = Upload;
+// First, let's properly define our form values type
+export interface SuratFormValues {
+    tanggal: Dayjs;
+    expired_data: Dayjs;
+    perihal: string;
+    organisasi: string;
+    tujuan: string;
+    pengirim: string;
+    penerima: string;
+    sifat_surat: string;
+    diteruskan_kepada: string;
+    kategori: string;
+    tanggal_penyelesaian: string;
+    isi_disposisi: string;
+    alamat: string; // Menambahkan field alamat
+    scan_surat?: File;
+}
+
+export interface SuratMasuk {
+    no_surat_masuk: string;
+    tanggal: string;
+    perihal: string;
+    organisasi: string;
+    tujuan: string;
+    pengirim: string;
+    penerima: string;
+    sifat_surat: string;
+    diteruskan_kepada: string;
+    kategori: string;
+    tanggal_penyelesaian: string;
+    isi_disposisi: string;
+    alamat: string;
+    scan_surat?: string;
+}
 
 interface InputFormProps {
     visible: boolean;
@@ -22,18 +56,54 @@ export const InputForm: React.FC<InputFormProps> = ({
     loading
 }) => {
     const [form] = Form.useForm();
+    const [fileList, setFileList] = useState<UploadFile[]>([]);
+
+    const beforeUpload = (file: RcFile) => {
+        const isJpgOrPngOrPdf = file.type === 'image/jpeg' ||
+            file.type === 'image/png' ||
+            file.type === 'application/pdf';
+        if (!isJpgOrPngOrPdf) {
+            message.error('Anda hanya dapat mengunggah file JPG/PNG/PDF!');
+            return Upload.LIST_IGNORE;
+        }
+
+        const isLt5M = file.size / 1024 / 1024 < 5;
+        if (!isLt5M) {
+            message.error('File harus lebih kecil dari 5MB!');
+            return Upload.LIST_IGNORE;
+        }
+
+        return false;
+    };
 
     const uploadProps: UploadProps = {
-        name: 'file',
+        name: 'scan_surat',
         multiple: false,
-        action: `${import.meta.env.VITE_BASE_URL}api/surat-masuk/upload`,
+        fileList,
+        beforeUpload,
         onChange(info) {
-            if (info.file.status === 'done') {
-                message.success(`${info.file.name} file uploaded successfully`);
-            } else if (info.file.status === 'error') {
-                message.error(`${info.file.name} file upload failed.`);
-            }
+            setFileList(info.fileList.slice(-1));
         },
+        onRemove: () => {
+            setFileList([]);
+            return true;
+        }
+    };
+
+    const handleSubmit = async (values: any) => {
+        try {
+            // Create the values object that matches SuratFormValues
+            const submissionValues: SuratFormValues = {
+                ...values,
+                scan_surat: fileList[0]?.originFileObj
+            };
+
+            await onSubmit(submissionValues);
+            setFileList([]);
+            form.resetFields();
+        } catch (err) {
+            message.error('Gagal mengunggah data: ' + (err instanceof Error ? err.message : 'Unknown error'));
+        }
     };
 
     return (
@@ -45,36 +115,33 @@ export const InputForm: React.FC<InputFormProps> = ({
                 </div>
             }
             open={visible}
-            onCancel={onCancel}
+            onCancel={() => {
+                setFileList([]);
+                form.resetFields();
+                onCancel();
+            }}
             width={800}
             footer={null}
         >
             <Form
                 form={form}
                 layout="vertical"
-                onFinish={async (values) => {
-                    try {
-                        await onSubmit(values as SuratFormValues);
-                        form.resetFields();
-                    } catch (err) {
-                        // Error handled in parent
-                    }
-                }}
+                onFinish={handleSubmit}
             >
                 <Form.Item
-                    name="nomorSurat"
-                    label="Nomor Surat"
-                    rules={[{ required: true, message: 'Mohon masukkan nomor surat!' }]}
-                >
-                    <Input prefix={<FileTextOutlined />} placeholder="Masukkan nomor surat" />
-                </Form.Item>
-
-                <Form.Item
-                    name="tanggalSurat"
+                    name="tanggal"
                     label="Tanggal Surat"
                     rules={[{ required: true, message: 'Mohon pilih tanggal surat!' }]}
                 >
                     <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+
+                <Form.Item
+                    name="alamat"
+                    label="Alamat"
+                    rules={[{ required: true, message: 'Mohon masukkan alamat!' }]}
+                >
+                    <Input.TextArea rows={2} placeholder="Masukkan alamat" />
                 </Form.Item>
 
                 <Form.Item
@@ -94,7 +161,7 @@ export const InputForm: React.FC<InputFormProps> = ({
                 </Form.Item>
 
                 <Form.Item
-                    name="tujuanSurat"
+                    name="tujuan"
                     label="Tujuan Surat"
                     rules={[{ required: true, message: 'Mohon masukkan tujuan surat!' }]}
                 >
@@ -117,14 +184,62 @@ export const InputForm: React.FC<InputFormProps> = ({
                     <Input placeholder="Masukkan nama penerima" />
                 </Form.Item>
 
-                <Form.Item name="scanSurat" label="Scan Surat">
+                <Form.Item
+                    name="sifat_surat"
+                    label="Sifat Surat"
+                    rules={[{ required: true, message: 'Mohon masukkan sifat surat!' }]}
+                >
+                    <Input placeholder="Masukkan sifat surat" />
+                </Form.Item>
+
+                <Form.Item
+                    name="expired_data"
+                    label="Expired Data"
+                    rules={[{ required: true, message: 'Mohon pilih tanggal expired data!' }]}
+                >
+                    <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+
+                <Form.Item
+                    name="diteruskan_kepada"
+                    label="Diteruskan Kepada"
+                    rules={[{ required: true, message: 'Mohon masukkan field Diteruskan Kepada!' }]}
+                >
+                    <Input placeholder="Mohon masukkan field Diteruskan Kepada!" />
+                </Form.Item>
+
+                <Form.Item
+                    name="kategori"
+                    label="Kategori"
+                    rules={[{ required: true, message: 'Mohon masukkan kategori surat!' }]}
+                >
+                    <Input placeholder="Mohon masukkan kategori surat!" />
+                </Form.Item>
+
+                <Form.Item
+                    name="tanggal_penyelesaian"
+                    label="Tanggal Penyelesaian"
+                    rules={[{ required: true, message: 'Mohon masukkan tanggal penyelesaian surat!' }]}
+                >
+                    <Input placeholder="Mohon masukkan tanggal penyelesaian surat!" />
+                </Form.Item>
+
+                <Form.Item
+                    name="isi_disposisi"
+                    label="Disposisi"
+                    rules={[{ required: true, message: 'Mohon masukkan disposisi surat!' }]}
+                >
+                    <Input placeholder="Mohon masukkan disposisi surat!" />
+                </Form.Item>
+
+                <Form.Item name="scan_surat" label="Scan Surat">
                     <Dragger {...uploadProps}>
                         <p className="ant-upload-drag-icon">
                             <InboxOutlined />
                         </p>
                         <p className="ant-upload-text">Klik atau seret file ke area ini untuk mengunggah</p>
                         <p className="ant-upload-hint">
-                            Mendukung file PDF atau gambar. Maksimal ukuran file 5MB.
+                            Mendukung file PDF atau gambar (JPG/PNG). Maksimal ukuran file 5MB.
                         </p>
                     </Dragger>
                 </Form.Item>

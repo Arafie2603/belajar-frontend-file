@@ -26,7 +26,7 @@ const Login: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      const BASE_URL = import.meta.env.VITE_BASE_URL || "https://belajar-backend-d3iolm3c5-arafie2603s-projects.vercel.app/";
+      const BASE_URL = import.meta.env.VITE_BASE_URL || "https://api-efiling.vercel.app/";
 
       console.log('Attempting login with:', {
         nomor_identitas: values.nomor_identitas,
