@@ -31,7 +31,8 @@ const SuratMasukPage: React.FC = () => {
         error, 
         deleteSurat,
         addSurat,
-        pagination 
+        refreshData,
+        pagination
     } = useSuratMasuk(BASE_URL);
 
     const handleDelete = (noSurat: string) => {
