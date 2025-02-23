@@ -27,7 +27,7 @@ import {
   FileTextOutlined,
   SearchOutlined
 } from '@ant-design/icons';
-import type { UploadProps } from 'antd';
+import { UploadProps, Select } from 'antd';
 import CKEditorComponent from '../components/CKEditor';
 import { useSuratCache } from '../hooks/useSuratCache';
 import { useAuth } from '../hooks/useAuth';
@@ -153,6 +153,14 @@ const InputForm: React.FC<InputFormProps> = ({ visible, onCancel, onSubmit, subm
         </Form.Item>
 
         <Form.Item
+          name="tempat_surat"
+          label="Tempat Surat"
+          rules={[{ required: true, message: 'Mohon isi tempat surat!' }]}
+        >
+          <Input placeholder="Masukkan tempat surat" />
+        </Form.Item>
+
+        <Form.Item
           name="lampiran"
           label="Lampiran"
           rules={[{ required: true, message: 'Mohon isi lampiran surat!' }]}
@@ -223,11 +231,28 @@ const InputForm: React.FC<InputFormProps> = ({ visible, onCancel, onSubmit, subm
         </Form.Item>
 
         <Form.Item
-          name="tempat_surat"
-          label="Tempat Surat"
-          rules={[{ required: true, message: 'Mohon isi tempat surat!' }]}
+          name="keterangan"
+          label="Keterangan"
+          rules={[{ required: true, message: 'Mohon pilih keterangan!' }]}
         >
-          <Input placeholder="Masukkan tempat surat" />
+          <Select placeholder="Pilih keterangan">
+            <Select.Option value="H">H</Select.Option>
+          </Select>
+        </Form.Item>
+
+        <Form.Item
+          name="deskripsi"
+          label="Deskripsi"
+          rules={[{ required: true, message: 'Mohon isi deskripsi surat!' }]}
+        >
+          <Input placeholder="Masukkan deskripsi surat" />
+        </Form.Item>
+        <Form.Item
+          name="kategori"
+          label="Kategori"
+          rules={[{ required: true, message: 'Mohon isi kategori surat!' }]}
+        >
+          <Input placeholder="Masukkan kategori surat" />
         </Form.Item>
       </Form>
     </Modal>
@@ -416,7 +441,7 @@ const SuratKeluar: React.FC = () => {
 
   return (
     <Content style={{ margin: '16px' }}>
-      <Card bordered={false} className="shadow-sm">
+      <Card className="shadow-sm">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
             <Title level={2} style={{ margin: 0 }}>
