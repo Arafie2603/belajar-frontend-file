@@ -3,6 +3,8 @@ import { Card, Typography, Modal, Image, Spin, Alert, Button, Space, Badge, Divi
 import { useParams } from "react-router-dom";
 import { Document, Page } from 'react-pdf';
 import { useNavigate } from 'react-router-dom';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import "../pdfworker";
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
@@ -15,12 +17,15 @@ import {
     EyeOutlined,
     DownloadOutlined,
     NumberOutlined,
-    ArrowLeftOutlined
+    ArrowLeftOutlined,
+    FilePdfOutlined,
+    PrinterOutlined
 } from '@ant-design/icons';
+import { X } from 'lucide-react';
+import headerPDF from '../assets/images-resource/headersurat.jpeg';
 
 const { Title, Text } = Typography;
 
-// Keep your existing interfaces
 interface SuratKeluar {
     surat_nomor: string;
     tanggal: string;
@@ -36,7 +41,6 @@ interface SuratKeluar {
     id: string;
 }
 
-// Keep your existing utility functions
 const extractFilename = (minioUrl: string | undefined): string | null => {
     if (!minioUrl) return null;
     const urlParts = minioUrl.split('/');
@@ -48,7 +52,6 @@ const generateViewUrl = (filename: string | null): string | null => {
     return `https://api-efiling.vercel.app/api/files/view/${filename}`;
 };
 
-// Enhanced DetailItem component for consistent styling
 interface DetailItemProps {
     icon: React.ReactNode;
     label: string;
@@ -56,7 +59,6 @@ interface DetailItemProps {
 }
 
 const DetailItem: React.FC<DetailItemProps> = ({ icon, label, value }) => (
-
     <div style={{
         padding: '16px',
         backgroundColor: '#f5f5f5',
@@ -228,9 +230,11 @@ const DetailSuratKeluar: React.FC = () => {
     const [surat, setSurat] = useState<SuratKeluar | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+    const [isPDFPreviewOpen, setIsPDFPreviewOpen] = useState<boolean>(false);
     const [isPDF, setIsPDF] = useState<boolean>(false);
     const [error, setError] = useState<string>("");
     const [filename, setFilename] = useState<string | null>(null);
+    const [loading, setLoading] = useState<boolean>(false);
     const navigate = useNavigate();
 
     const { id } = useParams<{ id: string }>();
@@ -284,6 +288,165 @@ const DetailSuratKeluar: React.FC = () => {
     }, [id, API_URL, token]);
 
     const viewUrl = filename ? generateViewUrl(filename) : null;
+
+    const handleDownload = async () => {
+        setLoading(true);
+        try {
+            const content = document.getElementById('pdf-content');
+            const canvas = await html2canvas(content, {
+                scale: 2,
+                useCORS: true,
+                logging: false
+            });
+
+            const pdfWidth = 210;
+            const pdfHeight = 297;
+
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const contentWidth = canvas.width;
+            const contentHeight = canvas.height;
+            const ratio = Math.min(pdfWidth / contentWidth, pdfHeight / contentHeight);
+
+            const xOffset = (pdfWidth - contentWidth * ratio) / 2;
+            const yOffset = 0;
+
+            pdf.addImage(
+                canvas.toDataURL('image/png'),
+                'PNG',
+                xOffset,
+                yOffset,
+                contentWidth * ratio,
+                contentHeight * ratio
+            );
+
+            pdf.save(`surat-keluar-${surat?.surat_nomor}.pdf`);
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+        }
+        setLoading(false);
+    };
+
+    const formatDate = (dateString) => {
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        return new Date(dateString).toLocaleDateString('id-ID', options);
+    };
+
+    const PDFContent = () => (
+        <div id="pdf-content" className="w-[210mm] min-h-[297mm] bg-white mx-auto" style={{ padding: '12mm' }}>
+            {/* Header */}
+            <div style={{ marginBottom: '2rem' }}>
+                <img
+                    src={headerPDF}
+                    alt="Universitas Header"
+                    className="w-full h-auto object-contain"
+                />
+            </div>
+
+            {/* Document Title */}
+            <div style={{ marginBottom: '2.5rem' }}>
+                <h1 className="text-center font-bold text-xl">
+                    SURAT KELUAR
+                </h1>
+            </div>
+
+            {/* Document Content */}
+            <div style={{ lineHeight: '1.8' }}>
+                <div style={{ marginBottom: '1.5rem' }}>
+                    <div className="flex" style={{ marginBottom: '0.5rem' }}>
+                        <span className="w-32">No.</span>
+                        <span>: {surat?.surat_nomor}</span>
+                    </div>
+                    <div className="flex" style={{ marginBottom: '0.5rem' }}>
+                        <span className="w-32">Tanggal</span>
+                        <span>: {surat?.tanggal ? formatDate(surat.tanggal) : ''}</span>
+                    </div>
+                    <div className="flex">
+                        <span className="w-32">Lampiran</span>
+                        <span>: {surat?.lampiran || '-'}</span>
+                    </div>
+                </div>
+
+                <div style={{ marginBottom: '1.5rem', paddingTop: '1rem' }}>
+                    <div className="flex" style={{ marginBottom: '0.5rem' }}>
+                        <span className="w-32">Perihal</span>
+                        <span>: {surat?.penerima}</span>
+                    </div>
+                    <div className="flex" style={{ marginBottom: '0.5rem' }}>
+                        <span className="w-32">Tujuan</span>
+                        <span>: {surat?.pengirim}</span>
+                    </div>
+                </div>
+
+                <div style={{ marginBottom: '1.5rem', paddingTop: '1rem' }}>
+                    <div style={{ marginBottom: '1rem' }}>
+                        Yang bertanda tangan di bawah ini:
+                    </div>
+
+                    <div style={{ marginLeft: '2rem', marginBottom: '2rem' }}>
+                        <div className="flex" style={{ marginBottom: '0.5rem' }}>
+                            <span className="w-32">Nama</span>
+                            <span>: {surat?.jabatan_pengirim}</span>
+                        </div>
+                        <div className="flex">
+                            <span className="w-32">Jabatan</span>
+                            <span>: {surat?.sifat_surat}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ marginBottom: '2rem', lineHeight: '1.8' }}>
+                    <style>
+                        {`
+                        table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin: 15px 0;
+                        }
+                        
+                        table, th, td {
+                            border: 1px solid #333;
+                        }
+                        
+                        th, td {
+                            padding: 8px;
+                            text-align: left;
+                        }
+                        
+                        figure.table {
+                            margin: 15px 0;
+                        }
+                    `}
+                    </style>
+                    <div
+                        dangerouslySetInnerHTML={{ __html: surat?.isi_surat || '' }}
+                        className="wysiwyg-content"
+                    ></div>
+                </div>
+            </div>
+
+            {/* Footer with Signature */}
+            <div style={{ marginTop: '3rem', textAlign: 'right' }}>
+                <p>{surat?.tempat_surat || 'Jakarta'}, {formatDate(surat?.tanggal)}</p>
+                <div style={{ height: '8rem', position: 'relative' }}>
+                    {surat?.gambar && (
+                        <img
+                            src={surat.gambar}
+                            alt={surat.keterangan_gambar || "Stamp"}
+                            className="absolute right-0 top-0 object-contain"
+                            style={{ maxHeight: '100px' }}
+                        />
+                    )}
+                </div>
+                <p>{surat?.jabatan_pengirim}</p>
+                <p>({surat?.sifat_surat})</p>
+            </div>
+        </div>
+    );
 
     if (isLoading) {
         return (
@@ -398,45 +561,85 @@ const DetailSuratKeluar: React.FC = () => {
                 <Divider />
 
                 <div style={{ textAlign: 'center' }}>
-                    {viewUrl ? (
-                        <Space size="middle">
-                            <Button
-                                type="primary"
-                                icon={<EyeOutlined />}
-                                onClick={() => setIsModalOpen(true)}
-                                size="large"
-                            >
-                                Lihat Dokumen
-                            </Button>
-                            <Button
-                                icon={<DownloadOutlined />}
-                                href={viewUrl}
-                                target="_blank"
-                                size="large"
-                            >
-                                Download
-                            </Button>
-                        </Space>
-                    ) : (
-                        <Alert message="Tidak ada dokumen" type="error" />
-                    )}
+                    <Space size="middle">
+                        {viewUrl ? (
+                            <>
+                                <Button
+                                    type="primary"
+                                    icon={<EyeOutlined />}
+                                    onClick={() => setIsModalOpen(true)}
+                                    size="large"
+                                >
+                                    Lihat Dokumen
+                                </Button>
+                                <Button
+                                    icon={<DownloadOutlined />}
+                                    href={viewUrl}
+                                    target="_blank"
+                                    size="large"
+                                >
+                                    Download Dokumen
+                                </Button>
+                            </>
+                        ) : surat?.gambar ? (
+                            <>
+                                <Button
+                                    type="primary"
+                                    icon={<EyeOutlined />}
+                                    onClick={() => setIsModalOpen(true)}
+                                    size="large"
+                                >
+                                    Lihat Gambar
+                                </Button>
+                                <Button
+                                    icon={<DownloadOutlined />}
+                                    href={surat.gambar}
+                                    download={`gambar-${surat.surat_nomor}.png`}
+                                    target="_blank"
+                                    size="large"
+                                >
+                                    Download Gambar
+                                </Button>
+                            </>
+                        ) : (
+                            <Alert message="Tidak ada dokumen" type="warning" style={{ marginRight: '16px' }} />
+                        )}
+                    </Space>
                 </div>
             </Card>
 
-            {/* <div style={{ textAlign: 'center', marginTop: '24px' }}>
-                <Text type="secondary">E-Filing ©2025 Created by LAB ICT</Text>
-            </div> */}
-
+            {/* Document Modal */}
             <Modal
                 title={
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                         <FileTextOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
-                        <span>Dokumen Surat</span>
+                        <span>{viewUrl ? 'Dokumen Surat' : 'Gambar Surat'}</span>
                     </div>
                 }
                 open={isModalOpen}
                 onCancel={() => setIsModalOpen(false)}
-                footer={null}
+                footer={
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        {viewUrl ? (
+                            <Button
+                                icon={<DownloadOutlined />}
+                                href={viewUrl}
+                                target="_blank"
+                            >
+                                Download Dokumen
+                            </Button>
+                        ) : surat?.gambar ? (
+                            <Button
+                                icon={<DownloadOutlined />}
+                                href={surat.gambar}
+                                download={`gambar-${surat.surat_nomor}.png`}
+                                target="_blank"
+                            >
+                                Download Gambar
+                            </Button>
+                        ) : null}
+                    </div>
+                }
                 width="50%"
                 style={{ top: 20 }}
                 styles={{
@@ -460,10 +663,56 @@ const DetailSuratKeluar: React.FC = () => {
                             style={{ objectFit: 'contain' }}
                         />
                     )
+                ) : surat?.gambar ? (
+                    <Image
+                        width="100%"
+                        src={surat.gambar}
+                        alt={surat.keterangan_gambar || "Gambar Surat"}
+                        style={{ objectFit: 'contain' }}
+                    />
                 ) : (
-                    <Alert message="Tidak ada dokumen" type="error" />
+                    <Alert message="Tidak ada dokumen atau gambar" type="error" />
                 )}
             </Modal>
+
+            {/* PDF Preview Modal */}
+            {isPDFPreviewOpen && (
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center" style={{ zIndex: 1000 }}>
+                    <div className="bg-white/90 rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col">
+                        <div className="flex items-center justify-between p-4">
+                            <h2 className="text-xl font-semibold">Preview PDF</h2>
+                            <button
+                                onClick={() => setIsPDFPreviewOpen(false)}
+                                className="p-2 hover:bg-gray-100 rounded"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 p-4 overflow-auto bg-gray-100">
+                            <PDFContent />
+                        </div>
+
+                        <div className="p-4 flex justify-end gap-x-2">
+                            <button
+                                onClick={() => window.print()}
+                                className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                            >
+                                <PrinterOutlined style={{ marginRight: '8px' }} />
+                                Cetak
+                            </button>
+                            <button
+                                onClick={handleDownload}
+                                disabled={loading}
+                                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-blue-300"
+                            >
+                                <DownloadOutlined style={{ marginRight: '8px' }} />
+                                {loading ? 'Processing...' : 'Download'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
