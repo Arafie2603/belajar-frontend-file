@@ -18,7 +18,6 @@ import {
     DownloadOutlined,
     NumberOutlined,
     ArrowLeftOutlined,
-    FilePdfOutlined,
     PrinterOutlined
 } from '@ant-design/icons';
 import { X } from 'lucide-react';
@@ -293,6 +292,10 @@ const DetailSuratKeluar: React.FC = () => {
         setLoading(true);
         try {
             const content = document.getElementById('pdf-content');
+            if (!content) {
+                throw new Error("Elemen dengan ID 'pdf-content' tidak ditemukan");
+            }
+
             const canvas = await html2canvas(content, {
                 scale: 2,
                 useCORS: true,
@@ -331,10 +334,11 @@ const DetailSuratKeluar: React.FC = () => {
         setLoading(false);
     };
 
-    const formatDate = (dateString) => {
-        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+    const formatDate = (dateString: string): string => {
+        const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
         return new Date(dateString).toLocaleDateString('id-ID', options);
     };
+
 
     const PDFContent = () => (
         <div id="pdf-content" className="w-[210mm] min-h-[297mm] bg-white mx-auto" style={{ padding: '12mm' }}>
@@ -431,7 +435,7 @@ const DetailSuratKeluar: React.FC = () => {
 
             {/* Footer with Signature */}
             <div style={{ marginTop: '3rem', textAlign: 'right' }}>
-                <p>{surat?.tempat_surat || 'Jakarta'}, {formatDate(surat?.tanggal)}</p>
+                <p>{surat?.tempat_surat || 'Jakarta'}, {formatDate(surat?.tanggal || "")}</p>
                 <div style={{ height: '8rem', position: 'relative' }}>
                     {surat?.gambar && (
                         <img

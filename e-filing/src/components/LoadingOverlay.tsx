@@ -1,39 +1,15 @@
-import React from 'react';
-import { Spin } from 'antd';
-import { LoadingOutlined } from '@ant-design/icons';
 
-export interface LoadingOverlayProps {
-  isLoading: boolean;
-  message?: string;
-}
-
-export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ isLoading, message = 'Authenticating...' }) => {
-  if (!isLoading) return null;
-
-  const antIcon = <LoadingOutlined style={{ fontSize: 40 }} spin />;
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        zIndex: 9999,
-      }}
-    >
-      <Spin indicator={antIcon} />
-      <div style={{ marginTop: 16, color: '#1890ff', fontWeight: 500 }}>
-        {message}
-      </div>
-    </div>
-  );
+const LoadingOverlay = ({ isLoading = true }) => {
+    return (
+        <div className={`fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 transition-opacity duration-300 ${
+            isLoading ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}>
+            <div className="flex flex-col items-center">
+                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 border-solid"></div>
+                <p className="text-white mt-4">Memuat data...</p>
+            </div>
+        </div>
+    );
 };
 
 export default LoadingOverlay;
