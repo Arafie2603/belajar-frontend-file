@@ -1,46 +1,77 @@
-import { lazy } from 'react';
-import { createBrowserRouter } from 'react-router-dom';
+import { lazy, Suspense, ReactNode } from 'react';
+import { createBrowserRouter, RouteObject } from 'react-router-dom';
 import DashboardLayout from '../layouts/Dashboard_Layout';
 import Login from '../pages/Login';
 import DetailSuratKeluar from '../pages/DetailSuratKeluar';
+import LoadingOverlay from '../components/LoadingOverlay';
 
-
+// Lazy loaded components
+const Dashboard = lazy(() => import('../pages/DashboardPage'));
 const SuratKeluar = lazy(() => import('../pages/SuratKeluar'));
 const SuratMasuk = lazy(() => import('../pages/SuratMasuk'));
-const PagePDF = lazy(() => import('../pages/TemplatePDF'));
 const DetailSuratMasuk = lazy(() => import('../pages/DetailSuratMasuk'));
 
-const AppRoutes = createBrowserRouter([
+// Custom loading wrapper component
+const SuspenseWrapper: React.FC<{ children: ReactNode }> = ({ children }) => (
+    <Suspense fallback={<LoadingOverlay isLoading={true} />}>
+        {children}
+    </Suspense>
+);
+
+const routes: RouteObject[] = [
     {
         path: '/',
-        element: <Login />,
-    },
-    {
-        path: 'generate-pdf',
-        element: <PagePDF />,
+        element: <Login />
     },
     {
         path: '/dashboard',
         element: <DashboardLayout />,
         children: [
             {
+                index: true,
+                element: (
+                    <SuspenseWrapper>
+                        <Dashboard />
+                    </SuspenseWrapper>
+                )
+            },
+            {
                 path: 'surat-keluar',
-                element: <SuratKeluar />,
+                element: (
+                    <SuspenseWrapper>
+                        <SuratKeluar />
+                    </SuspenseWrapper>
+                )
             },
             {
                 path: 'surat-masuk',
-                element: <SuratMasuk />,
+                element: (
+                    <SuspenseWrapper>
+                        <SuratMasuk />
+                    </SuspenseWrapper>
+                )
             },
             {
                 path: 'surat-masuk/:no_surat_masuk',
-                element: <DetailSuratMasuk />,
+                element: (
+                    <SuspenseWrapper>
+                        <DetailSuratMasuk />
+                    </SuspenseWrapper>
+                )
             },
             {
                 path: 'surat-keluar/:id',
-                element: <DetailSuratKeluar />,
-            },
-        ],
-    },
-]);
+                element: (
+                    <SuspenseWrapper>
+                        <DetailSuratKeluar />
+                    </SuspenseWrapper>
+                )
+            }
+        ]
+    }
+];
 
+const AppRoutes = createBrowserRouter(routes);
+
+export { SuspenseWrapper };
 export default AppRoutes;

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { storage } from '../utils/storage';
 
@@ -16,24 +17,22 @@ export const useSuratCache = (baseUrl: string) => {
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<number>(0);
 
-    const getCachedData = (): CacheData | null => {
-        const cached = storage.get(CACHE_KEY);
-        if (!cached) return null;
-        return cached;
-    };
+    const getCachedData = useCallback((): CacheData | null => {
+        return storage.get(CACHE_KEY) || null;
+    }, []);
 
-    const setCachedData = (data: unknown[]) => {
+    const setCachedData = useCallback((data: unknown[]) => {
         const cacheData: CacheData = {
             data,
             timestamp: Date.now()
         };
         storage.set(CACHE_KEY, cacheData);
         setLastUpdated(cacheData.timestamp);
-    };
+    }, []);
 
-    const fetchData = async (forceFetch = false) => {
+    const fetchData = useCallback(async (forceFetch = false) => {
+        setLoading(true);
         const token = localStorage.getItem('token');
-        
         if (!token) {
             setError('Token tidak ditemukan');
             setLoading(false);
@@ -42,7 +41,6 @@ export const useSuratCache = (baseUrl: string) => {
 
         try {
             const cached = getCachedData();
-
             if (!forceFetch && cached && Date.now() - cached.timestamp < CACHE_DURATION) {
                 setData(cached.data);
                 setLoading(false);
@@ -50,14 +48,11 @@ export const useSuratCache = (baseUrl: string) => {
             }
 
             const response = await axios.get(`${baseUrl}api/surat-keluar`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (response.status === 200 && response.data.data.paginatedData) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const formattedData = response.data.data.paginatedData.map((item: any) => ({
+                const formattedData = response.data.data.paginatedData.map((item: Record<string, any>) => ({
                     id: item.id,
                     surat_nomor: item.surat_nomor,
                     tanggal: new Date(item.tanggal).toLocaleDateString('id-ID'),
@@ -78,43 +73,27 @@ export const useSuratCache = (baseUrl: string) => {
             }
         } catch (error) {
             console.error('Error fetching data:', error);
-            if (axios.isAxiosError(error)) {
-                if (error.response?.status === 401) {
-                    // Token tidak valid atau expired
-                    localStorage.removeItem('token');
-                    window.location.href = '/';
-                    return;
-                }
-                setError(error.response?.data?.message || 'Gagal mengambil data');
-            } else {
-                setError('Terjadi kesalahan saat mengambil data');
-            }
-            
-            // Gunakan cache sebagai fallback jika ada error
+            setError('Gagal mengambil data');
             const cached = getCachedData();
             if (cached) {
                 setData(cached.data);
             }
         } finally {
-            setLoading(false);
+            setTimeout(() => setLoading(false), 500);
         }
-    };
+    }, [baseUrl, getCachedData, setCachedData]);
 
-    // Initial fetch
     useEffect(() => {
         fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [fetchData]);
 
-    // Periodic check for updates
     useEffect(() => {
         const interval = setInterval(() => {
             fetchData(true);
         }, CACHE_DURATION);
 
         return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [fetchData]);
 
     return { 
         data, 
