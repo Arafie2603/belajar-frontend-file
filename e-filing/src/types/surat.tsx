@@ -38,8 +38,9 @@ export interface SuratMasukResponse {
     message: string;
 }
 // Interface untuk form values
-export interface SuratFormValues extends Omit<SuratMasuk, 'no_surat_masuk' | 'user_id' | 'scan_surat' | 'tanggal' | 'expired_data'> {
+export interface SuratFormValues extends Omit<SuratMasuk, 'no_surat_masuk' | 'user_id' | 'scan_surat' | 'tanggal' | 'expired_data' | 'tanggal_penyelesaian'> {
     tanggal: Dayjs;
     expired_data: Dayjs;
+    tanggal_penyelesaian: Dayjs;
     scan_surat?: File;
 }

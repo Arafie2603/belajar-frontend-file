@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { storage } from '../utils/storage';
 import { SuratMasuk, SuratMasukResponse, PaginationMeta } from '../types/surat';
+import { eventBus, DATA_EVENTS } from '../utils/eventBus'
 
 interface CacheData {
     data: SuratMasuk[];
@@ -12,12 +13,18 @@ interface CacheData {
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const CACHE_KEY = 'surat_masuk_cache';
 
+export const invalidateSpecificCache = (cacheKey: string) => {
+    storage.remove(cacheKey);
+};
+
+
 export const useSuratMasuk = (baseUrl: string) => {
     const [data, setData] = useState<SuratMasuk[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<number>(0);
     const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+    const [currentRecord, setCurrentRecord] = useState<SuratMasuk | null>(null);
 
     const getCachedData = useCallback((): CacheData | null => {
         const cached = storage.get(CACHE_KEY);
@@ -117,6 +124,50 @@ export const useSuratMasuk = (baseUrl: string) => {
         }
     }, [baseUrl, getCachedData, setCachedData]);
 
+    const fetchSuratById = useCallback(async (noSurat: string) => {
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+            throw new Error('Token tidak ditemukan');
+        }
+        
+        // First check if we have it in the cache or local state
+        if (data.length > 0) {
+            const cachedSurat = data.find(item => item.no_surat_masuk === noSurat);
+            if (cachedSurat) {
+                console.log('Retrieving surat from cache:', noSurat);
+                setCurrentRecord(cachedSurat);
+                return cachedSurat;
+            }
+        }
+
+        // Not in cache, fetch from API
+        try {
+            console.log('Fetching surat details from API:', noSurat);
+            setLoading(true);
+            const response = await axios.get(`${baseUrl}api/surat-masuk/${noSurat}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.status === 200 && response.data.data) {
+                const suratData = response.data.data;
+                console.log('Retrieved surat details:', suratData);
+                setCurrentRecord(suratData);
+                return suratData;
+            }
+        } catch (error) {
+            console.error('Error fetching surat details:', error);
+            if (axios.isAxiosError(error)) {
+                throw new Error(error.response?.data?.message || 'Gagal mengambil detail surat');
+            }
+            throw new Error('Terjadi kesalahan saat mengambil detail surat');
+        } finally {
+            setLoading(false);
+        }
+    }, [baseUrl, data]);
+
     const addSurat = useCallback(async (formData: FormData) => {
         const token = localStorage.getItem('token');
         
@@ -151,6 +202,57 @@ export const useSuratMasuk = (baseUrl: string) => {
                 throw new Error(error.response?.data?.message || 'Gagal menambahkan surat');
             }
             throw new Error('Terjadi kesalahan saat menambahkan surat');
+        }
+    }, [baseUrl, fetchData]);
+
+    const updateSurat = useCallback(async (noSurat: string, formData: FormData) => {
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+            throw new Error('Token tidak ditemukan');
+        }
+
+        try {
+            console.log('Updating surat:', noSurat);
+            console.log('Sending updated form data:', Object.fromEntries(formData));
+            
+            const response = await axios.patch(`${baseUrl}api/surat-masuk/${noSurat}`, formData, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            console.log('Update surat response:', response.data);
+
+            if (response.status === 200) {
+                // Clear cache
+                storage.remove(CACHE_KEY);
+                console.log('Cache cleared after updating surat');
+                // Add small delay before fetching new data
+                await new Promise(resolve => setTimeout(resolve, 500));
+                // Force fetch new data
+                await fetchData(true);
+                
+                // Invalidate specific cache
+                if (typeof window !== 'undefined' && invalidateSpecificCache) {
+                    invalidateSpecificCache(DATA_EVENTS.SURAT_MASUK_UPDATED);
+                }
+                
+                // Emit events if eventBus exists
+                if (typeof window !== 'undefined' && eventBus) {
+                    eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+                    eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
+                }
+                
+                return true;
+            }
+        } catch (error) {
+            console.error('Update surat error:', error);
+            if (axios.isAxiosError(error)) {
+                throw new Error(error.response?.data?.message || 'Gagal memperbarui surat');
+            }
+            throw new Error('Terjadi kesalahan saat memperbarui surat');
         }
     }, [baseUrl, fetchData]);
 
@@ -217,8 +319,11 @@ export const useSuratMasuk = (baseUrl: string) => {
         error,
         lastUpdated,
         pagination,
+        currentRecord,
+        fetchSuratById,
         refreshData: () => fetchData(true),
         deleteSurat,
-        addSurat
+        addSurat,
+        updateSurat
     };
 };

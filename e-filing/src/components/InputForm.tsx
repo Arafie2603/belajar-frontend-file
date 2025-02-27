@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, DatePicker, Space, Button, Upload, message } from 'antd';
-import { InboxOutlined, FileTextOutlined } from '@ant-design/icons';
+import { InboxOutlined, FileTextOutlined, EditOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import type { RcFile, UploadFile } from 'antd/es/upload/interface';
 import type { Dayjs } from 'dayjs';
 import Dragger from 'antd/es/upload/Dragger';
+import dayjs from 'dayjs';
+import { SuratMasuk } from '../types/surat';
 
 // First, let's properly define our form values type
 export interface SuratFormValues {
@@ -17,29 +19,10 @@ export interface SuratFormValues {
     pengirim: string;
     penerima: string;
     sifat_surat: string;
-    diteruskan_kepada: string;
-    kategori: string;
-    tanggal_penyelesaian: string;
+    tanggal_penyelesaian: Dayjs;
     isi_disposisi: string;
     alamat: string; // Menambahkan field alamat
     scan_surat?: File;
-}
-
-export interface SuratMasuk {
-    no_surat_masuk: string;
-    tanggal: string;
-    perihal: string;
-    organisasi: string;
-    tujuan: string;
-    pengirim: string;
-    penerima: string;
-    sifat_surat: string;
-    diteruskan_kepada: string;
-    kategori: string;
-    tanggal_penyelesaian: string;
-    isi_disposisi: string;
-    alamat: string;
-    scan_surat?: string;
 }
 
 interface InputFormProps {
@@ -47,16 +30,58 @@ interface InputFormProps {
     onCancel: () => void;
     onSubmit: (values: SuratFormValues) => Promise<void>;
     loading?: boolean;
+    isEdit?: boolean;
+    initialData?: SuratMasuk | null;
+    title?: string;
 }
 
 export const InputForm: React.FC<InputFormProps> = ({
     visible,
     onCancel,
     onSubmit,
-    loading
+    loading,
+    isEdit = false,
+    initialData = null,
+    title = 'Input Surat Masuk Baru'
 }) => {
     const [form] = Form.useForm();
     const [fileList, setFileList] = useState<UploadFile[]>([]);
+    const [fileChanged, setFileChanged] = useState(false);
+
+    // Initialize form with data when editing
+    useEffect(() => {
+        if (visible && isEdit && initialData) {
+            console.log('Initializing form with data:', initialData);
+            
+            form.setFieldsValue({
+                ...initialData,
+                tanggal: initialData.tanggal ? dayjs(initialData.tanggal) : undefined,
+                expired_data: initialData.expired_data ? dayjs(initialData.expired_data) : undefined,
+                tanggal_penyelesaian: initialData.tanggal_penyelesaian ? dayjs(initialData.tanggal_penyelesaian) : undefined,
+            });
+            
+            // If there's a scan_surat URL, create a file list entry for display
+            if (initialData.scan_surat) {
+                const fileType = initialData.scan_surat.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
+                const fileName = initialData.scan_surat.split('/').pop() || 'dokumen';
+                
+                setFileList([{
+                    uid: '-1',
+                    name: fileName,
+                    status: 'done',
+                    url: initialData.scan_surat,
+                    type: fileType
+                }]);
+                
+                setFileChanged(false);
+            }
+        } else if (visible && !isEdit) {
+            // Reset form when not editing
+            form.resetFields();
+            setFileList([]);
+            setFileChanged(false);
+        }
+    }, [visible, isEdit, initialData, form]);
 
     const beforeUpload = (file: RcFile) => {
         const isJpgOrPngOrPdf = file.type === 'image/jpeg' ||
@@ -73,6 +98,7 @@ export const InputForm: React.FC<InputFormProps> = ({
             return Upload.LIST_IGNORE;
         }
 
+        setFileChanged(true);
         return false;
     };
 
@@ -83,9 +109,13 @@ export const InputForm: React.FC<InputFormProps> = ({
         beforeUpload,
         onChange(info) {
             setFileList(info.fileList.slice(-1));
+            if (info.fileList.length > 0) {
+                setFileChanged(true);
+            }
         },
         onRemove: () => {
             setFileList([]);
+            setFileChanged(true);
             return true;
         }
     };
@@ -95,11 +125,13 @@ export const InputForm: React.FC<InputFormProps> = ({
             // Create the values object that matches SuratFormValues
             const submissionValues: SuratFormValues = {
                 ...values,
-                scan_surat: fileList[0]?.originFileObj
+                // Only include the file if it was changed during editing
+                scan_surat: fileChanged ? fileList[0]?.originFileObj : undefined
             };
 
             await onSubmit(submissionValues);
             setFileList([]);
+            setFileChanged(false);
             form.resetFields();
         } catch (err) {
             message.error('Gagal mengunggah data: ' + (err instanceof Error ? err.message : 'Unknown error'));
@@ -110,8 +142,8 @@ export const InputForm: React.FC<InputFormProps> = ({
         <Modal
             title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <FileTextOutlined style={{ color: '#1890ff' }} />
-                    <span>Input Surat Masuk Baru</span>
+                    {isEdit ? <EditOutlined style={{ color: '#1890ff' }} /> : <FileTextOutlined style={{ color: '#1890ff' }} />}
+                    <span>{title}</span>
                 </div>
             }
             open={visible}
@@ -201,27 +233,11 @@ export const InputForm: React.FC<InputFormProps> = ({
                 </Form.Item>
 
                 <Form.Item
-                    name="diteruskan_kepada"
-                    label="Diteruskan Kepada"
-                    rules={[{ required: true, message: 'Mohon masukkan field Diteruskan Kepada!' }]}
-                >
-                    <Input placeholder="Mohon masukkan field Diteruskan Kepada!" />
-                </Form.Item>
-
-                <Form.Item
-                    name="kategori"
-                    label="Kategori"
-                    rules={[{ required: true, message: 'Mohon masukkan kategori surat!' }]}
-                >
-                    <Input placeholder="Mohon masukkan kategori surat!" />
-                </Form.Item>
-
-                <Form.Item
                     name="tanggal_penyelesaian"
                     label="Tanggal Penyelesaian"
                     rules={[{ required: true, message: 'Mohon masukkan tanggal penyelesaian surat!' }]}
                 >
-                    <Input placeholder="Mohon masukkan tanggal penyelesaian surat!" />
+                    <DatePicker style={{ width: '100%' }} />
                 </Form.Item>
 
                 <Form.Item
@@ -232,7 +248,11 @@ export const InputForm: React.FC<InputFormProps> = ({
                     <Input placeholder="Mohon masukkan disposisi surat!" />
                 </Form.Item>
 
-                <Form.Item name="scan_surat" label="Scan Surat">
+                <Form.Item 
+                    name="scan_surat" 
+                    label="Scan Surat"
+                    extra={isEdit && !fileChanged && initialData?.scan_surat ? "File yang ada akan digunakan kecuali jika Anda mengunggah file baru" : ""}
+                >
                     <Dragger {...uploadProps}>
                         <p className="ant-upload-drag-icon">
                             <InboxOutlined />
@@ -248,7 +268,7 @@ export const InputForm: React.FC<InputFormProps> = ({
                     <Space>
                         <Button onClick={onCancel}>Batal</Button>
                         <Button type="primary" htmlType="submit" loading={loading}>
-                            Simpan
+                            {isEdit ? 'Perbarui' : 'Simpan'}
                         </Button>
                     </Space>
                 </Form.Item>

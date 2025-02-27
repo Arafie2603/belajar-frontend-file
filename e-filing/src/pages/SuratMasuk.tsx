@@ -25,6 +25,8 @@ const SuratMasukPage: React.FC = () => {
     const navigate = useNavigate();
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [searchText, setSearchText] = useState('');
+    const [editRecord, setEditRecord] = useState<SuratMasuk | null>(null);
+    const [isEditMode, setIsEditMode] = useState(false);
 
     const BASE_URL = import.meta.env.VITE_BASE_URL || "https://api-efiling.vercel.app/";
     const {
@@ -33,6 +35,7 @@ const SuratMasukPage: React.FC = () => {
         error,
         deleteSurat,
         addSurat,
+        updateSurat,
         refreshData,
         pagination
     } = useSuratMasuk(BASE_URL);
@@ -64,37 +67,52 @@ const SuratMasukPage: React.FC = () => {
             },
         });
     };
-    const handleSubmit = async (values: SuratFormValues) => {
-        try {
-            const formData = new FormData();
 
-            // Handle date fields
+    const handleEdit = (record: SuratMasuk) => {
+        setEditRecord(record);
+        setIsEditMode(true);
+        setIsModalVisible(true);
+    };
+
+  
+const handleSubmit = async (values: SuratFormValues) => {
+    try {
+        const formData = new FormData();
+
+        // Handle date fields dengan benar
+        if (values.tanggal) {
             formData.append('tanggal', values.tanggal.format('YYYY-MM-DD'));
+        }
+        
+        if (values.expired_data) {
             formData.append('expired_data', values.expired_data.format('YYYY-MM-DD'));
+        }
+        
+        if (values.tanggal_penyelesaian) {
+            formData.append('tanggal_penyelesaian', values.tanggal_penyelesaian.format('YYYY-MM-DD'));
+        }
 
-            // Handle file upload
-            if (values.scan_surat instanceof File) {
-                formData.append('scan_surat', values.scan_surat);
+        // Handle file upload
+        if (values.scan_surat instanceof File) {
+            formData.append('scan_surat', values.scan_surat);
+        }
+
+        // Handle other fields
+        Object.entries(values).forEach(([key, value]) => {
+            if (
+                value !== undefined &&
+                key !== 'tanggal' &&
+                key !== 'expired_data' &&
+                key !== 'tanggal_penyelesaian' &&
+                key !== 'scan_surat'
+            ) {
+                formData.append(key, String(value));
             }
+        });
 
-            // Handle other fields
-            Object.entries(values).forEach(([key, value]) => {
-                if (
-                    value !== undefined &&
-                    key !== 'tanggal' &&
-                    key !== 'expired_data' &&
-                    key !== 'scan_surat'
-                ) {
-                    formData.append(key, String(value));
-                }
-            });
-
-            await addSurat(formData);
-            message.success('Surat berhasil ditambahkan!');
-            setIsModalVisible(false);
-            // Explicitly refresh data after successful submission
-            await refreshData();
-
+        if (isEditMode && editRecord) {
+            // Update existing surat
+            await updateSurat(editRecord.no_surat_masuk, formData);
             // Invalidate specific cache
             invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
 
@@ -105,10 +123,41 @@ const SuratMasukPage: React.FC = () => {
             // Emit events
             eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
             eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
-        } catch (err) {
-            console.error('Error submitting form:', err);
-            message.error('Gagal menambahkan surat!');
+            message.success('Surat berhasil diperbarui!');
+        } else {
+            // Add new surat
+            await addSurat(formData);
+            message.success('Surat berhasil ditambahkan!');
         }
+
+        setIsModalVisible(false);
+        setIsEditMode(false);
+        setEditRecord(null);
+
+        // Explicitly refresh data after successful submission
+        await refreshData();
+
+        // Invalidate specific cache
+        invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+
+        // Also invalidate dependent caches
+        invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+        invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+        // Emit events
+        eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+        eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
+    } catch (err) {
+        console.error('Error submitting form:', err);
+        message.error(isEditMode ? 'Gagal memperbarui surat!' : 'Gagal menambahkan surat!');
+    }
+};
+
+
+    const handleCancel = () => {
+        setIsModalVisible(false);
+        setIsEditMode(false);
+        setEditRecord(null);
     };
 
     const columns: ColumnsType<SuratMasuk> = [
@@ -172,7 +221,7 @@ const SuratMasukPage: React.FC = () => {
                     <Tooltip title="Edit">
                         <Button
                             icon={<EditOutlined />}
-                            onClick={() => message.info('Fitur edit akan segera hadir!')}
+                            onClick={() => handleEdit(record)}
                         />
                     </Tooltip>
                     <Tooltip title="Hapus">
@@ -217,7 +266,11 @@ const SuratMasukPage: React.FC = () => {
                         <Button
                             type="primary"
                             icon={<PlusOutlined />}
-                            onClick={() => setIsModalVisible(true)}
+                            onClick={() => {
+                                setIsEditMode(false);
+                                setEditRecord(null);
+                                setIsModalVisible(true);
+                            }}
                             size="large"
                         >
                             Tambah Surat
@@ -254,9 +307,12 @@ const SuratMasukPage: React.FC = () => {
 
             <InputForm
                 visible={isModalVisible}
-                onCancel={() => setIsModalVisible(false)}
+                onCancel={handleCancel}
                 onSubmit={handleSubmit}
                 loading={loading}
+                isEdit={isEditMode}
+                initialData={editRecord}
+                title={isEditMode ? 'Edit Surat Masuk' : 'Input Surat Masuk Baru'}
             />
         </Content>
     );
