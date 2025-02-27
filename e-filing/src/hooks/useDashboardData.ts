@@ -1,5 +1,4 @@
-// hooks/useDashboardData.ts
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import { storage } from '../utils/storage';
@@ -139,13 +138,14 @@ export const useDashboardData = () => {
     const [recentDocs, setRecentDocs] = useState<DocumentItem[]>([]);
     const [calendarEvents, setCalendarEvents] = useState<Map<string, CalendarEvent[]>>(new Map());
 
-    // Function to check if cached data is still valid
-    const isCacheValid = <T,>(cachedData: CachedData<T> | null): boolean => {
+    // Function to check if cached data is still valid - memoize as it doesn't depend on props or state
+    const isCacheValid = useCallback(<T,>(cachedData: CachedData<T> | null): boolean => {
         if (!cachedData) return false;
         return Date.now() - cachedData.timestamp < CACHE_EXPIRY;
-    };
+    }, []);
 
-    const getDataWithCache = async <T>(
+    // Memoize getDataWithCache with useCallback
+    const getDataWithCache = useCallback(async <T>(
         url: string,
         cacheKey: string
     ): Promise<T> => {
@@ -163,18 +163,10 @@ export const useDashboardData = () => {
         });
 
         return response.data;
-    };
+    }, [isCacheValid]); // Add isCacheValid as a dependency
 
-
-
-
-    const forceRefresh = async () => {
-        Object.values(CACHE_KEYS).forEach(key => storage.remove(key));
-        // Fetch fresh data
-        fetchData(true);
-    };
-
-    const fetchData = async (skipCache: boolean = false) => {
+    // Define fetchData function first
+    const fetchData = useCallback(async (skipCache: boolean = false) => {
         try {
             setLoading(true);
 
@@ -338,47 +330,25 @@ export const useDashboardData = () => {
 
             setLoading(false);
         }
-    };
+    }, [getDataWithCache]); // Add getDataWithCache as a dependency
 
+    // Now define forceRefresh after fetchData
+    const forceRefresh = useCallback(async () => {
+        Object.values(CACHE_KEYS).forEach(key => storage.remove(key));
+        // Fetch fresh data
+        fetchData(true);
+    }, [fetchData]); // Add fetchData as a dependency
+
+    // Store fetchData in a ref to prevent effect dependencies from changing
     const fetchDataRef = useRef(fetchData);
-
-
-
+    
+    // Update the ref whenever fetchData changes
     useEffect(() => {
-        // Initial data fetch
-        fetchDataRef.current();
+        fetchDataRef.current = fetchData;
+    }, [fetchData]);
 
-        // Set up regular refresh interval
-        const refreshInterval = setInterval(() => {
-            fetchDataRef.current();
-        }, CACHE_EXPIRY / 2);
-
-        // Set up event listeners for data updates
-        const unsubscribe = eventBus.on(DATA_EVENTS.ANY_DATA_UPDATED, () => {
-            console.log('Data update detected, refreshing dashboard data');
-            storage.remove(CACHE_KEYS.RECENT_DOCS);
-            fetchRecentDocsOnly();
-            fetchDataRef.current(true); // Force skip cache on data update events
-        });
-
-        const unsubscribeCalendar = eventBus.on(DATA_EVENTS.NOTULEN_UPDATED, () => {
-            console.log('Memperbarui data kalender kegiatan');
-
-            // Invalidate cache untuk calendar events
-            storage.remove(CACHE_KEYS.CALENDAR_EVENTS);
-
-            // Fetch khusus data notulen untuk kalender
-            updateCalendarEvents();
-        });
-
-        return () => {
-            clearInterval(refreshInterval);
-            unsubscribe();
-            unsubscribeCalendar();
-        };
-    }, []);
-    // Fungsi untuk fetch data terbaru saja
-    const fetchRecentDocsOnly = async (skipCache: boolean = false) => {
+    // Memoize the fetchRecentDocsOnly function
+    const fetchRecentDocsOnly = useCallback(async (skipCache: boolean = false) => {
         try {
             setLoading(true);
 
@@ -498,10 +468,10 @@ export const useDashboardData = () => {
             console.error("Error updating recent docs:", error);
             setLoading(false);
         }
-    };
+    }, [getDataWithCache]); // Add getDataWithCache as a dependency
 
-    // Fungsi untuk update kalender saja
-    const updateCalendarEvents = async () => {
+    // Memoize updateCalendarEvents
+    const updateCalendarEvents = useCallback(async () => {
         try {
             // Fetch notulen data
             const notulenRes = await axios.get<ApiResponse<Notulen>>(
@@ -541,13 +511,45 @@ export const useDashboardData = () => {
         } catch (error) {
             console.error("Error updating calendar events:", error);
         }
-    };
-    
+    }, []); // No dependencies needed for this function
 
+    useEffect(() => {
+        // Initial data fetch
+        fetchDataRef.current();
 
-    const getCalendarEventsForDate = (dateStr: string): CalendarEvent[] => {
+        // Set up regular refresh interval
+        const refreshInterval = setInterval(() => {
+            fetchDataRef.current();
+        }, CACHE_EXPIRY / 2);
+
+        // Set up event listeners for data updates
+        const unsubscribe = eventBus.on(DATA_EVENTS.ANY_DATA_UPDATED, () => {
+            console.log('Data update detected, refreshing dashboard data');
+            storage.remove(CACHE_KEYS.RECENT_DOCS);
+            fetchRecentDocsOnly();
+            fetchDataRef.current(true); // Force skip cache on data update events
+        });
+
+        const unsubscribeCalendar = eventBus.on(DATA_EVENTS.NOTULEN_UPDATED, () => {
+            console.log('Memperbarui data kalender kegiatan');
+
+            // Invalidate cache untuk calendar events
+            storage.remove(CACHE_KEYS.CALENDAR_EVENTS);
+
+            // Fetch khusus data notulen untuk kalender
+            updateCalendarEvents();
+        });
+
+        return () => {
+            clearInterval(refreshInterval);
+            unsubscribe();
+            unsubscribeCalendar();
+        };
+    }, [fetchRecentDocsOnly, updateCalendarEvents]); // Include required dependencies
+
+    const getCalendarEventsForDate = useCallback((dateStr: string): CalendarEvent[] => {
         return calendarEvents.get(dateStr) || [];
-    };
+    }, [calendarEvents]);
 
     return {
         loading,
