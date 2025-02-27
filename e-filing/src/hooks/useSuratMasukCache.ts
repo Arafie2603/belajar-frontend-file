@@ -19,21 +19,27 @@ export const useSuratMasuk = (baseUrl: string) => {
     const [lastUpdated, setLastUpdated] = useState<number>(0);
     const [pagination, setPagination] = useState<PaginationMeta | null>(null);
 
-    const getCachedData = (): CacheData | null => {
+    const getCachedData = useCallback((): CacheData | null => {
         const cached = storage.get(CACHE_KEY);
-        if (!cached) return null;
+        if (!cached) {
+            console.log('No cache found');
+            return null;
+        }
+        console.log('Cache found with timestamp:', new Date(cached.timestamp).toLocaleString());
         return cached;
-    };
+    }, []);
 
-    const setCachedData = (data: SuratMasuk[], pagination: PaginationMeta) => {
+    const setCachedData = useCallback((data: SuratMasuk[], pagination: PaginationMeta) => {
+        const timestamp = Date.now();
         const cacheData: CacheData = {
             data,
             pagination,
-            timestamp: Date.now()
+            timestamp
         };
+        console.log('Setting cache with timestamp:', new Date(timestamp).toLocaleString());
         storage.set(CACHE_KEY, cacheData);
-        setLastUpdated(cacheData.timestamp);
-    };
+        setLastUpdated(timestamp);
+    }, []);
 
     const fetchData = useCallback(async (forceFetch = false) => {
         console.log('Fetching data with forceFetch:', forceFetch);
@@ -46,17 +52,26 @@ export const useSuratMasuk = (baseUrl: string) => {
         }
 
         try {
-            const cached = getCachedData();
-            console.log('Cached data:', cached);
-
-            if (!forceFetch && cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-                console.log('Using cached data');
-                setData(cached.data);
-                setPagination(cached.pagination);
-                setLoading(false);
-                return;
+            // Check cache first if not forcing fetch
+            if (!forceFetch) {
+                const cached = getCachedData();
+                const isCacheValid = cached && (Date.now() - cached.timestamp) < CACHE_DURATION;
+                
+                if (isCacheValid) {
+                    console.log('Using cached data, age:', (Date.now() - cached.timestamp) / 1000, 'seconds');
+                    setData(cached.data);
+                    setPagination(cached.pagination);
+                    setLoading(false);
+                    setLastUpdated(cached.timestamp);
+                    return;
+                }
+                console.log('Cache expired or not found, fetching from API');
+            } else {
+                console.log('Force fetching from API');
             }
 
+            // Fetch from API
+            setLoading(true);
             const response = await axios.get<SuratMasukResponse>(`${baseUrl}api/surat-masuk`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -69,7 +84,7 @@ export const useSuratMasuk = (baseUrl: string) => {
                 const newData = response.data.data.paginatedData;
                 const newMeta = response.data.data.meta;
                 
-                console.log('Setting new data:', newData);
+                console.log('Setting new data from API:', newData.length, 'items');
                 setData(newData);
                 setPagination(newMeta);
                 setCachedData(newData, newMeta);
@@ -77,6 +92,16 @@ export const useSuratMasuk = (baseUrl: string) => {
             }
         } catch (error) {
             console.error('Error fetching data:', error);
+            
+            // Try to use cache on error
+            const cached = getCachedData();
+            if (cached) {
+                console.log('Error occurred, using cached data as fallback');
+                setData(cached.data);
+                setPagination(cached.pagination);
+                setLastUpdated(cached.timestamp);
+            }
+            
             if (axios.isAxiosError(error)) {
                 if (error.response?.status === 401) {
                     localStorage.removeItem('token');
@@ -87,16 +112,10 @@ export const useSuratMasuk = (baseUrl: string) => {
             } else {
                 setError('Terjadi kesalahan saat mengambil data');
             }
-            
-            const cached = getCachedData();
-            if (cached) {
-                setData(cached.data);
-                setPagination(cached.pagination);
-            }
         } finally {
             setLoading(false);
         }
-    }, [baseUrl]);
+    }, [baseUrl, getCachedData, setCachedData]);
 
     const addSurat = useCallback(async (formData: FormData) => {
         const token = localStorage.getItem('token');
@@ -119,6 +138,7 @@ export const useSuratMasuk = (baseUrl: string) => {
             if (response.status === 200) {
                 // Clear cache
                 storage.remove(CACHE_KEY);
+                console.log('Cache cleared after adding new surat');
                 // Add small delay before fetching new data
                 await new Promise(resolve => setTimeout(resolve, 500));
                 // Force fetch new data
@@ -149,6 +169,7 @@ export const useSuratMasuk = (baseUrl: string) => {
             });
 
             if (response.status === 200) {
+                console.log('Surat deleted, clearing cache');
                 storage.remove(CACHE_KEY);
                 await fetchData(true);
                 return true;
@@ -161,27 +182,34 @@ export const useSuratMasuk = (baseUrl: string) => {
         }
     }, [baseUrl, fetchData]);
 
+    // Only fetch on initial component mount
     useEffect(() => {
-        console.log('Initial fetch triggered');
-        fetchData(true); // Force fetch on initial load
+        console.log('Initial data fetch');
+        fetchData(false); // Try to use cache on initial load
     }, [fetchData]);
 
+    // Set up a refresh interval that respects cache
     useEffect(() => {
         console.log('Setting up periodic fetch');
         const interval = setInterval(() => {
-            fetchData(true);
-        }, CACHE_DURATION);
+            console.log('Checking if cache needs refresh');
+            const cached = getCachedData();
+            const cacheAge = cached ? Date.now() - cached.timestamp : Infinity;
+            
+            if (!cached || cacheAge >= CACHE_DURATION) {
+                console.log('Cache expired, refreshing data');
+                fetchData(true);
+            } else {
+                console.log('Cache still valid, no refresh needed. Expires in:', 
+                    Math.round((CACHE_DURATION - cacheAge) / 1000), 'seconds');
+            }
+        }, 60000); // Check every minute
 
         return () => {
             console.log('Cleaning up interval');
             clearInterval(interval);
         };
-    }, [fetchData]);
-
-    // Monitor data changes
-    useEffect(() => {
-        console.log('Current data state:', data);
-    }, [data]);
+    }, [fetchData, getCachedData]);
 
     return {
         data,

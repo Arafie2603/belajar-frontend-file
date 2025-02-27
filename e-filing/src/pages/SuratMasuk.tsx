@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState } from 'react';
 import { Layout, Table, Button, Modal, Card, Typography, Input, Space, Tooltip, Badge, message } from 'antd';
-import { 
-    PlusOutlined, 
-    EditOutlined, 
-    DeleteOutlined, 
-    EyeOutlined, 
-    SearchOutlined, 
-    FileTextOutlined 
+import {
+    PlusOutlined,
+    EditOutlined,
+    DeleteOutlined,
+    EyeOutlined,
+    SearchOutlined,
+    FileTextOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useSuratMasuk } from '../hooks/useSuratMasukCache';
@@ -15,6 +15,8 @@ import { InputForm } from '../components/InputForm';
 import type { SuratMasuk, SuratFormValues } from '../types/surat';
 import { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
+import { invalidateSpecificCache, CACHE_KEYS } from '../hooks/useDashboardData';
+import { eventBus, DATA_EVENTS } from '../utils/eventBus';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -23,12 +25,12 @@ const SuratMasukPage: React.FC = () => {
     const navigate = useNavigate();
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [searchText, setSearchText] = useState('');
-    
+
     const BASE_URL = import.meta.env.VITE_BASE_URL || "https://api-efiling.vercel.app/";
-    const { 
-        data, 
-        loading, 
-        error, 
+    const {
+        data,
+        loading,
+        error,
         deleteSurat,
         addSurat,
         refreshData,
@@ -45,6 +47,16 @@ const SuratMasukPage: React.FC = () => {
             onOk: async () => {
                 try {
                     await deleteSurat(noSurat);
+                    // Invalidate specific cache
+                    invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+
+                    // Also invalidate dependent caches
+                    invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+                    invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+                    // Emit events
+                    eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+                    eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
                     message.success('Surat berhasil dihapus!');
                 } catch (err) {
                     message.error('Gagal menghapus surat!');
@@ -55,33 +67,44 @@ const SuratMasukPage: React.FC = () => {
     const handleSubmit = async (values: SuratFormValues) => {
         try {
             const formData = new FormData();
-            
+
             // Handle date fields
             formData.append('tanggal', values.tanggal.format('YYYY-MM-DD'));
             formData.append('expired_data', values.expired_data.format('YYYY-MM-DD'));
-            
+
             // Handle file upload
             if (values.scan_surat instanceof File) {
                 formData.append('scan_surat', values.scan_surat);
             }
-            
+
             // Handle other fields
             Object.entries(values).forEach(([key, value]) => {
                 if (
-                    value !== undefined && 
-                    key !== 'tanggal' && 
-                    key !== 'expired_data' && 
+                    value !== undefined &&
+                    key !== 'tanggal' &&
+                    key !== 'expired_data' &&
                     key !== 'scan_surat'
                 ) {
                     formData.append(key, String(value));
                 }
             });
-    
+
             await addSurat(formData);
             message.success('Surat berhasil ditambahkan!');
             setIsModalVisible(false);
             // Explicitly refresh data after successful submission
             await refreshData();
+
+            // Invalidate specific cache
+            invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+
+            // Also invalidate dependent caches
+            invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+            invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+            // Emit events
+            eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+            eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
         } catch (err) {
             console.error('Error submitting form:', err);
             message.error('Gagal menambahkan surat!');

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// For pages/DashboardPage.tsx
+import React from 'react';
 import { Outlet } from 'react-router-dom';
 import {
     Card,
@@ -27,206 +28,26 @@ import {
     ClockCircleOutlined,
     BellOutlined
 } from '@ant-design/icons';
-import axios from 'axios';
-import dayjs, { Dayjs } from 'dayjs';
+import type { Dayjs } from 'dayjs';
+import useDashboardData from '../hooks/useDashboardData';
+
 const { Title, Text } = Typography;
 
-// Define proper interfaces for our data
-interface UserData {
-    id: string;
-    nama: string;
-    nomor_identitas: string;
-    role: string;
-    password?: string;
-}
-
-interface MetaData {
-    currentPage: number;
-    totalItems: number;
-    totalPages: number;
-    itemsPerPage: number;
-}
-
-interface ApiResponse<T> {
-    data: {
-        paginatedData: T[];
-        meta: MetaData;
-    };
-    status: number;
-    message: string;
-}
-
-interface ProfileResponse {
-    data: UserData;
-    status: number;
-    message: string;
-}
-
-interface SuratMasuk {
-    no_surat_masuk: string;
-    tanggal: string;
-    perihal: string;
-    pengirim: string;
-    penerima: string;
-    sifat_surat: string;
-}
-
-interface SuratKeluar {
-    id: string;
-    tanggal: string;
-    surat_nomor: string;
-    pengirim: string;
-    penerima: string;
-    sifat_surat: string;
-}
-
-interface Faktur {
-    id: string;
-    bukti_pembayaran: string;
-    deskripsi: string;
-    tanggal?: string; // Added tanggal field
-    nomor_faktur?: string; // Added nomor_faktur field
-}
-
-interface Notulen {
-    id: string;
-    judul: string;
-    tanggal_rapat: string;
-    lokasi: string;
-    pemimpin_rapat: string;
-    peserta?: string;
-    agenda?: string;
-}
-
-interface DocumentItem {
-    id: string;
-    type: string;
-    title: string;
-    date: Date;
-    sender: string;
-    status: string;
-}
-
-interface CalendarEvent {
-    type: "warning" | "success" | "error" | "processing";
-    content: string;
-}
-
 const Dashboard: React.FC = () => {
-    const [loading, setLoading] = useState<boolean>(true);
-    const [userData, setUserData] = useState<UserData | null>(null);
-    const [stats, setStats] = useState({
-        suratMasuk: 0,
-        suratKeluar: 0,
-        faktur: 0,
-        notulen: 0,
-        users: 0
-    });
-    const [recentDocs, setRecentDocs] = useState<DocumentItem[]>([]);
-    const [calendarEvents, setCalendarEvents] = useState<Map<string, CalendarEvent[]>>(new Map());
+    const {
+        loading,
+        userData,
+        stats,
+        recentDocs,
+        getCalendarEventsForDate,
+        forceRefresh
+    } = useDashboardData();
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoading(true);
-
-                // Fetch user profile
-                const profileRes = await axios.get<ProfileResponse>('https://api-efiling.vercel.app/api/users/profile');
-                setUserData(profileRes.data.data);
-
-                // Fetch statistics
-                const [suratMasukRes, suratKeluarRes, fakturRes, notulenRes, usersRes] = await Promise.all([
-                    axios.get<ApiResponse<SuratMasuk>>('https://api-efiling.vercel.app/api/surat-masuk'),
-                    axios.get<ApiResponse<SuratKeluar>>('https://api-efiling.vercel.app/api/surat-keluar'),
-                    axios.get<ApiResponse<Faktur>>('https://api-efiling.vercel.app/api/faktur'),
-                    axios.get<ApiResponse<Notulen>>('https://api-efiling.vercel.app/api/notulen'),
-                    axios.get<ApiResponse<UserData>>('https://api-efiling.vercel.app/api/users')
-                ]);
-
-                // Set stats - correctly extract data from the API responses
-                setStats({
-                    suratMasuk: suratMasukRes.data.data.meta.totalItems,
-                    suratKeluar: suratKeluarRes.data.data.meta.totalItems,
-                    faktur: fakturRes.data.data.meta.totalItems,
-                    notulen: notulenRes.data.data.meta.totalItems,
-                    users: usersRes.data.data.meta.totalItems
-                });
-
-                // Extract notulen data for calendar events
-                const eventsMap = new Map<string, CalendarEvent[]>();
-                notulenRes.data.data.paginatedData.forEach(rapat => {
-                    const date = dayjs(rapat.tanggal_rapat).format('YYYY-MM-DD');
-                    const event: CalendarEvent = {
-                        type: "warning",
-                        content: rapat.judul
-                    };
-                    
-                    if (eventsMap.has(date)) {
-                        eventsMap.get(date)?.push(event);
-                    } else {
-                        eventsMap.set(date, [event]);
-                    }
-                });
-                setCalendarEvents(eventsMap);
-
-                // Combine recent documents from different sources
-                const combinedDocs: DocumentItem[] = [
-                    ...suratMasukRes.data.data.paginatedData.map(doc => ({
-                        id: doc.no_surat_masuk,
-                        type: 'Surat Masuk',
-                        title: doc.perihal,
-                        date: new Date(doc.tanggal),
-                        sender: doc.pengirim,
-                        status: 'Masuk'
-                    })),
-                    ...suratKeluarRes.data.data.paginatedData.map(doc => ({
-                        id: doc.id,
-                        type: 'Surat Keluar',
-                        title: 'Surat Keluar - ' + doc.surat_nomor,
-                        date: new Date(doc.tanggal),
-                        sender: doc.pengirim,
-                        status: 'Keluar'
-                    })),
-                    ...fakturRes.data.data.paginatedData.map(doc => ({
-                        id: doc.id,
-                        type: 'Faktur',
-                        title: 'Faktur - ' + (doc.nomor_faktur || doc.id),
-                        date: new Date(doc.tanggal || Date.now()),
-                        sender: '-',
-                        status: 'Tagihan'
-                    })),
-                    ...notulenRes.data.data.paginatedData.map(doc => ({
-                        id: doc.id,
-                        type: 'Notulen',
-                        title: doc.judul,
-                        date: new Date(doc.tanggal_rapat),
-                        sender: doc.pemimpin_rapat,
-                        status: 'Rapat'
-                    }))
-                ];
-
-                // Sort by date
-                combinedDocs.sort((a, b) => b.date.getTime() - a.date.getTime());
-                setRecentDocs(combinedDocs);
-
-                setLoading(false);
-            } catch (error) {
-                console.error("Error fetching data:", error);
-                setLoading(false);
-            }
-        };
-
-        fetchData();
-    }, []);
-
-    // Dynamic calendar events based on fetched data
-    const getListData = (value: Dayjs): CalendarEvent[] => {
-        const dateStr = value.format('YYYY-MM-DD');
-        return calendarEvents.get(dateStr) || [];
-    };
-
+    // Calendar cell renderer using the hook data
     const dateCellRender = (value: Dayjs) => {
-        const listData = getListData(value);
+        const dateStr = value.format('YYYY-MM-DD');
+        const listData = getCalendarEventsForDate(dateStr);
+        
         return (
             <ul className="events" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {listData.map((item, index) => (
@@ -326,6 +147,11 @@ const Dashboard: React.FC = () => {
     return (
         <div style={{ padding: '24px' }}>
             <Title level={2}>Dashboard E-Filing</Title>
+            <Space style={{ marginBottom: '16px' }}>
+                <Tag color="blue" onClick={() => forceRefresh()} style={{ cursor: 'pointer' }}>
+                    <ClockCircleOutlined /> Perbarui Data
+                </Tag>
+            </Space>
             <Divider />
 
             {loading ? (
