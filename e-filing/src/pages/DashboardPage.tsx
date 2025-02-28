@@ -47,7 +47,7 @@ const Dashboard: React.FC = () => {
     const dateCellRender = (value: Dayjs) => {
         const dateStr = value.format('YYYY-MM-DD');
         const listData = getCalendarEventsForDate(dateStr);
-        
+
         return (
             <ul className="events" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {listData.map((item, index) => (
@@ -67,8 +67,8 @@ const Dashboard: React.FC = () => {
             render: (text: string) => {
                 let color = 'blue';
                 let icon = <SendOutlined />;
-                
-                switch(text) {
+
+                switch (text) {
                     case 'Surat Masuk':
                         color = 'green';
                         icon = <MailOutlined />;
@@ -86,7 +86,7 @@ const Dashboard: React.FC = () => {
                         icon = <FileTextOutlined />;
                         break;
                 }
-                
+
                 return (
                     <Tag color={color} icon={icon}>
                         {text}
@@ -117,8 +117,8 @@ const Dashboard: React.FC = () => {
             key: 'status',
             render: (text: string) => {
                 let color = 'blue';
-                
-                switch(text) {
+
+                switch (text) {
                     case 'Masuk':
                         color = 'green';
                         break;
@@ -132,7 +132,7 @@ const Dashboard: React.FC = () => {
                         color = 'purple';
                         break;
                 }
-                
+
                 return <Tag color={color}>{text}</Tag>;
             },
         },
@@ -273,7 +273,7 @@ const Dashboard: React.FC = () => {
                             </Card>
                         </Col>
 
-                        {/* Calendar */}
+
                         <Col xs={24} lg={8}>
                             <Card
                                 title={
@@ -286,10 +286,11 @@ const Dashboard: React.FC = () => {
                             >
                                 <Calendar
                                     fullscreen={false}
-                                    dateCellRender={dateCellRender}
+                                    cellRender={(date) => dateCellRender(date)}
                                 />
                             </Card>
                         </Col>
+
                     </Row>
                 </>
             )}

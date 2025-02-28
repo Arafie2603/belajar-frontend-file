@@ -74,7 +74,6 @@ const SuratMasukPage: React.FC = () => {
         setIsModalVisible(true);
     };
 
-  
 const handleSubmit = async (values: SuratFormValues) => {
     try {
         const formData = new FormData();
@@ -253,7 +252,7 @@ const handleSubmit = async (values: SuratFormValues) => {
 
     return (
         <Content style={{ margin: '16px' }}>
-            <Card bordered={false} className="shadow-sm">
+            <Card variant='outlined' className="shadow-sm">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                     <div>
                         <Title level={2} style={{ margin: 0 }}>
