@@ -34,6 +34,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { eventBus, DATA_EVENTS } from '../utils/eventBus';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -446,7 +447,7 @@ const SuratKeluar: React.FC = () => {
   });
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <LoadingSkeleton />;
   }
 
   if (error) {
