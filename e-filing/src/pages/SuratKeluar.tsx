@@ -304,22 +304,6 @@ const SuratForm: React.FC<FormProps> = ({
             <Select.Option value="H">H</Select.Option>
           </Select>
         </Form.Item>
-
-        <Form.Item
-          name="deskripsi"
-          label="Deskripsi"
-          rules={[{ required: true, message: 'Mohon isi deskripsi surat!' }]}
-        >
-          <Input placeholder="Masukkan deskripsi surat" />
-        </Form.Item>
-
-        <Form.Item
-          name="kategori"
-          label="Kategori"
-          rules={[{ required: true, message: 'Mohon isi kategori surat!' }]}
-        >
-          <Input placeholder="Masukkan kategori surat" />
-        </Form.Item>
       </Form>
     </Modal>
   );

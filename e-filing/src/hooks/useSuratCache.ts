@@ -286,7 +286,7 @@ export const useSuratCache = (baseUrl: string) => {
         try {
             console.log('Updating surat keluar:', id);
 
-            const response = await axios.put(`${baseUrl}api/surat-keluar/${id}`, formData, {
+            const response = await axios.patch(`${baseUrl}api/surat-keluar/${id}`, formData, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'multipart/form-data'

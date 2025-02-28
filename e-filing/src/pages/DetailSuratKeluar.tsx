@@ -18,6 +18,7 @@ import {
     DownloadOutlined,
     NumberOutlined,
     ArrowLeftOutlined,
+    FilePdfOutlined,
     PrinterOutlined
 } from '@ant-design/icons';
 import { X } from 'lucide-react';
@@ -25,6 +26,7 @@ import headerPDF from '../assets/images-resource/headersurat.jpeg';
 
 const { Title, Text } = Typography;
 
+// Keep your existing interfaces
 interface SuratKeluar {
     surat_nomor: string;
     tanggal: string;
@@ -40,6 +42,7 @@ interface SuratKeluar {
     id: string;
 }
 
+// Keep your existing utility functions
 const extractFilename = (minioUrl: string | undefined): string | null => {
     if (!minioUrl) return null;
     const urlParts = minioUrl.split('/');
@@ -51,6 +54,7 @@ const generateViewUrl = (filename: string | null): string | null => {
     return `https://api-efiling.vercel.app/api/files/view/${filename}`;
 };
 
+// Enhanced DetailItem component for consistent styling
 interface DetailItemProps {
     icon: React.ReactNode;
     label: string;
@@ -287,15 +291,36 @@ const DetailSuratKeluar: React.FC = () => {
     }, [id, API_URL, token]);
 
     const viewUrl = filename ? generateViewUrl(filename) : null;
+    const processHtmlContent = (html: string): string => {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+
+        const tables = tempDiv.querySelectorAll('table');
+        tables.forEach(table => {
+            (table as HTMLElement).style.borderCollapse = 'collapse';
+            (table as HTMLElement).style.width = '100%';
+            (table as HTMLElement).style.marginBottom = '1rem';
+
+            const cells = table.querySelectorAll('th, td');
+            cells.forEach(cell => {
+                (cell as HTMLElement).style.border = '1px solid #000';
+                (cell as HTMLElement).style.padding = '8px';
+                (cell as HTMLElement).style.textAlign = 'left';
+            });
+        });
+
+        return tempDiv.innerHTML;
+    };
 
     const handleDownload = async () => {
         setLoading(true);
         try {
             const content = document.getElementById('pdf-content');
             if (!content) {
-                throw new Error("Elemen dengan ID 'pdf-content' tidak ditemukan");
+                console.error("Elemen dengan ID 'pdf-content' tidak ditemukan.");
+                setLoading(false);
+                return;
             }
-
             const canvas = await html2canvas(content, {
                 scale: 2,
                 useCORS: true,
@@ -339,6 +364,28 @@ const DetailSuratKeluar: React.FC = () => {
         return new Date(dateString).toLocaleDateString('id-ID', options);
     };
 
+    // Add global styles for tables
+    useEffect(() => {
+        // Create a style element
+        const styleElement = document.createElement('style');
+        styleElement.innerHTML = `
+            #pdf-content table {
+                border-collapse: collapse;
+                width: 100%;
+                margin-bottom: 1rem;
+            }
+            #pdf-content th, #pdf-content td {
+                border: 1px solid #000;
+                padding: 8px;
+                text-align: left;
+            }
+        `;
+        document.head.appendChild(styleElement);
+
+        return () => {
+            document.head.removeChild(styleElement);
+        };
+    }, []);
 
     const PDFContent = () => (
         <div id="pdf-content" className="w-[210mm] min-h-[297mm] bg-white mx-auto" style={{ padding: '12mm' }}>
@@ -351,12 +398,11 @@ const DetailSuratKeluar: React.FC = () => {
                 />
             </div>
 
-            {/* Document Title */}
-            <div style={{ marginBottom: '2.5rem' }}>
+            {/* <div style={{ marginBottom: '2.5rem' }}>
                 <h1 className="text-center font-bold text-xl">
                     SURAT KELUAR
                 </h1>
-            </div>
+            </div> */}
 
             {/* Document Content */}
             <div style={{ lineHeight: '1.8' }}>
@@ -365,10 +411,10 @@ const DetailSuratKeluar: React.FC = () => {
                         <span className="w-32">No.</span>
                         <span>: {surat?.surat_nomor}</span>
                     </div>
-                    <div className="flex" style={{ marginBottom: '0.5rem' }}>
+                    {/* <div className="flex" style={{ marginBottom: '0.5rem' }}>
                         <span className="w-32">Tanggal</span>
                         <span>: {surat?.tanggal ? formatDate(surat.tanggal) : ''}</span>
-                    </div>
+                    </div> */}
                     <div className="flex">
                         <span className="w-32">Lampiran</span>
                         <span>: {surat?.lampiran || '-'}</span>
@@ -386,7 +432,7 @@ const DetailSuratKeluar: React.FC = () => {
                     </div>
                 </div>
 
-                <div style={{ marginBottom: '1.5rem', paddingTop: '1rem' }}>
+                {/* <div style={{ marginBottom: '1.5rem', paddingTop: '1rem' }}>
                     <div style={{ marginBottom: '1rem' }}>
                         Yang bertanda tangan di bawah ini:
                     </div>
@@ -401,54 +447,32 @@ const DetailSuratKeluar: React.FC = () => {
                             <span>: {surat?.sifat_surat}</span>
                         </div>
                     </div>
-                </div>
+                </div> */}
 
                 <div style={{ marginBottom: '2rem', lineHeight: '1.8' }}>
-                    <style>
-                        {`
-                        table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            margin: 15px 0;
-                        }
-                        
-                        table, th, td {
-                            border: 1px solid #333;
-                        }
-                        
-                        th, td {
-                            padding: 8px;
-                            text-align: left;
-                        }
-                        
-                        figure.table {
-                            margin: 15px 0;
-                        }
-                    `}
-                    </style>
-                    <div
-                        dangerouslySetInnerHTML={{ __html: surat?.isi_surat || '' }}
-                        className="wysiwyg-content"
-                    ></div>
+                    {/* Use processed HTML content with table borders */}
+                    <div dangerouslySetInnerHTML={{
+                        __html: surat?.isi_surat ? processHtmlContent(surat.isi_surat) : ''
+                    }}></div>
                 </div>
             </div>
 
-            {/* Footer with Signature */}
             <div style={{ marginTop: '3rem', textAlign: 'right' }}>
-                <p>{surat?.tempat_surat || 'Jakarta'}, {formatDate(surat?.tanggal || "")}</p>
+                <p>{(surat?.tempat_surat ?? 'Jakarta') + ', ' + formatDate(surat?.tanggal ?? '')}</p>
                 <div style={{ height: '8rem', position: 'relative' }}>
                     {surat?.gambar && (
                         <img
                             src={surat.gambar}
-                            alt={surat.keterangan_gambar || "Stamp"}
+                            alt={surat.keterangan_gambar ?? "Stamp"}
                             className="absolute right-0 top-0 object-contain"
                             style={{ maxHeight: '100px' }}
                         />
                     )}
                 </div>
-                <p>{surat?.jabatan_pengirim}</p>
-                <p>({surat?.sifat_surat})</p>
+                <p>{surat?.jabatan_pengirim ?? ''}</p>
+                <p>({surat?.sifat_surat ?? ''})</p>
             </div>
+
         </div>
     );
 
@@ -582,32 +606,21 @@ const DetailSuratKeluar: React.FC = () => {
                                     target="_blank"
                                     size="large"
                                 >
-                                    Download Dokumen
-                                </Button>
-                            </>
-                        ) : surat?.gambar ? (
-                            <>
-                                <Button
-                                    type="primary"
-                                    icon={<EyeOutlined />}
-                                    onClick={() => setIsModalOpen(true)}
-                                    size="large"
-                                >
-                                    Lihat Gambar
-                                </Button>
-                                <Button
-                                    icon={<DownloadOutlined />}
-                                    href={surat.gambar}
-                                    download={`gambar-${surat.surat_nomor}.png`}
-                                    target="_blank"
-                                    size="large"
-                                >
-                                    Download Gambar
+                                    Download
                                 </Button>
                             </>
                         ) : (
                             <Alert message="Tidak ada dokumen" type="warning" style={{ marginRight: '16px' }} />
                         )}
+                        <Button
+                            type="primary"
+                            icon={<FilePdfOutlined />}
+                            onClick={() => setIsPDFPreviewOpen(true)}
+                            size="large"
+                            style={{ backgroundColor: '#52c41a' }}
+                        >
+                            Generate PDF
+                        </Button>
                     </Space>
                 </div>
             </Card>
@@ -617,33 +630,12 @@ const DetailSuratKeluar: React.FC = () => {
                 title={
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                         <FileTextOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
-                        <span>{viewUrl ? 'Dokumen Surat' : 'Gambar Surat'}</span>
+                        <span>Dokumen Surat</span>
                     </div>
                 }
                 open={isModalOpen}
                 onCancel={() => setIsModalOpen(false)}
-                footer={
-                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        {viewUrl ? (
-                            <Button
-                                icon={<DownloadOutlined />}
-                                href={viewUrl}
-                                target="_blank"
-                            >
-                                Download Dokumen
-                            </Button>
-                        ) : surat?.gambar ? (
-                            <Button
-                                icon={<DownloadOutlined />}
-                                href={surat.gambar}
-                                download={`gambar-${surat.surat_nomor}.png`}
-                                target="_blank"
-                            >
-                                Download Gambar
-                            </Button>
-                        ) : null}
-                    </div>
-                }
+                footer={null}
                 width="50%"
                 style={{ top: 20 }}
                 styles={{
@@ -667,15 +659,8 @@ const DetailSuratKeluar: React.FC = () => {
                             style={{ objectFit: 'contain' }}
                         />
                     )
-                ) : surat?.gambar ? (
-                    <Image
-                        width="100%"
-                        src={surat.gambar}
-                        alt={surat.keterangan_gambar || "Gambar Surat"}
-                        style={{ objectFit: 'contain' }}
-                    />
                 ) : (
-                    <Alert message="Tidak ada dokumen atau gambar" type="error" />
+                    <Alert message="Tidak ada dokumen" type="error" />
                 )}
             </Modal>
 
