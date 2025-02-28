@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState } from 'react';
-import { Layout, Table, Button, Modal, Card, Typography, Input, Space, Tooltip, Badge, message } from 'antd';
+import { Layout, Table, Button, Modal, Card, Typography, Input, Space, Tooltip, message } from 'antd';
 import {
     PlusOutlined,
     EditOutlined,
@@ -74,44 +74,68 @@ const SuratMasukPage: React.FC = () => {
         setIsModalVisible(true);
     };
 
-const handleSubmit = async (values: SuratFormValues) => {
-    try {
-        const formData = new FormData();
+    const handleSubmit = async (values: SuratFormValues) => {
+        try {
+            const formData = new FormData();
 
-        // Handle date fields dengan benar
-        if (values.tanggal) {
-            formData.append('tanggal', values.tanggal.format('YYYY-MM-DD'));
-        }
-        
-        if (values.expired_data) {
-            formData.append('expired_data', values.expired_data.format('YYYY-MM-DD'));
-        }
-        
-        if (values.tanggal_penyelesaian) {
-            formData.append('tanggal_penyelesaian', values.tanggal_penyelesaian.format('YYYY-MM-DD'));
-        }
-
-        // Handle file upload
-        if (values.scan_surat instanceof File) {
-            formData.append('scan_surat', values.scan_surat);
-        }
-
-        // Handle other fields
-        Object.entries(values).forEach(([key, value]) => {
-            if (
-                value !== undefined &&
-                key !== 'tanggal' &&
-                key !== 'expired_data' &&
-                key !== 'tanggal_penyelesaian' &&
-                key !== 'scan_surat'
-            ) {
-                formData.append(key, String(value));
+            // Handle date fields dengan benar
+            if (values.tanggal) {
+                formData.append('tanggal', values.tanggal.format('YYYY-MM-DD'));
             }
-        });
 
-        if (isEditMode && editRecord) {
-            // Update existing surat
-            await updateSurat(editRecord.no_surat_masuk, formData);
+            if (values.expired_data) {
+                formData.append('expired_data', values.expired_data.format('YYYY-MM-DD'));
+            }
+
+            if (values.tanggal_penyelesaian) {
+                formData.append('tanggal_penyelesaian', values.tanggal_penyelesaian.format('YYYY-MM-DD'));
+            }
+
+            // Handle file upload
+            if (values.scan_surat instanceof File) {
+                formData.append('scan_surat', values.scan_surat);
+            }
+
+            // Handle other fields
+            Object.entries(values).forEach(([key, value]) => {
+                if (
+                    value !== undefined &&
+                    key !== 'tanggal' &&
+                    key !== 'expired_data' &&
+                    key !== 'tanggal_penyelesaian' &&
+                    key !== 'scan_surat'
+                ) {
+                    formData.append(key, String(value));
+                }
+            });
+
+            if (isEditMode && editRecord) {
+                // Update existing surat
+                await updateSurat(editRecord.no_surat_masuk, formData);
+                // Invalidate specific cache
+                invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+
+                // Also invalidate dependent caches
+                invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+                invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+                // Emit events
+                eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+                eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
+                message.success('Surat berhasil diperbarui!');
+            } else {
+                // Add new surat
+                await addSurat(formData);
+                message.success('Surat berhasil ditambahkan!');
+            }
+
+            setIsModalVisible(false);
+            setIsEditMode(false);
+            setEditRecord(null);
+
+            // Explicitly refresh data after successful submission
+            await refreshData();
+
             // Invalidate specific cache
             invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
 
@@ -122,35 +146,11 @@ const handleSubmit = async (values: SuratFormValues) => {
             // Emit events
             eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
             eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
-            message.success('Surat berhasil diperbarui!');
-        } else {
-            // Add new surat
-            await addSurat(formData);
-            message.success('Surat berhasil ditambahkan!');
+        } catch (err) {
+            console.error('Error submitting form:', err);
+            message.error(isEditMode ? 'Gagal memperbarui surat!' : 'Gagal menambahkan surat!');
         }
-
-        setIsModalVisible(false);
-        setIsEditMode(false);
-        setEditRecord(null);
-
-        // Explicitly refresh data after successful submission
-        await refreshData();
-
-        // Invalidate specific cache
-        invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
-
-        // Also invalidate dependent caches
-        invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
-        invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
-
-        // Emit events
-        eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
-        eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
-    } catch (err) {
-        console.error('Error submitting form:', err);
-        message.error(isEditMode ? 'Gagal memperbarui surat!' : 'Gagal menambahkan surat!');
-    }
-};
+    };
 
 
     const handleCancel = () => {
@@ -258,31 +258,38 @@ const handleSubmit = async (values: SuratFormValues) => {
                         <Title level={2} style={{ margin: 0 }}>
                             <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
                             Surat Masuk
+                            <span style={{
+                                fontSize: '16px',
+                                backgroundColor: '#1890ff',
+                                color: 'white',
+                                borderRadius: '12px',
+                                padding: '2px 10px',
+                                marginLeft: '12px',
+                                display: 'inline-block',
+                                verticalAlign: 'middle'
+                            }}>
+                                {data.length}
+                            </span>
                         </Title>
                         <Text type="secondary">Kelola semua surat masuk Anda di sini</Text>
                     </div>
-                    <Badge count={pagination?.totalItems || 0}>
-                        <Button
-                            type="primary"
-                            icon={<PlusOutlined />}
-                            onClick={() => {
-                                setIsEditMode(false);
-                                setEditRecord(null);
-                                setIsModalVisible(true);
-                            }}
-                            size="large"
-                        >
-                            Tambah Surat
-                        </Button>
-                    </Badge>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => setIsModalVisible(true)}
+                        size="large"
+                    >
+                        Tambah Surat
+                    </Button>
                 </div>
 
                 <div style={{ marginBottom: 16 }}>
                     <Input
                         placeholder="Cari surat..."
                         prefix={<SearchOutlined />}
-                        onChange={e => setSearchText(e.target.value)}
+                        onChange={(e) => setSearchText(e.target.value)}
                         style={{ width: 300 }}
+                        allowClear
                     />
                 </div>
 

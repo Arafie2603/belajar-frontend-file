@@ -14,7 +14,6 @@ import {
   DatePicker,
   Space,
   Tooltip,
-  Badge,
   Upload,
   Alert,
   Select
@@ -30,7 +29,7 @@ import {
 } from '@ant-design/icons';
 import { UploadProps } from 'antd';
 import CKEditorComponent from '../components/CKEditor';
-import { useSuratCache } from '../hooks/useSuratCache';
+import { useSuratCache } from '../hooks/useSuratKeluarCache';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -395,10 +394,10 @@ const SuratKeluar: React.FC = () => {
           Authorization: `Bearer ${token}`
         },
       });
-      
+
       message.success('Surat keluar berhasil ditambahkan!');
       setIsModalVisible(false);
-      
+
       // Emit events to notify other components - this will trigger refreshData via the subscription
       eventBus.emit(DATA_EVENTS.SURAT_KELUAR_UPDATED);
       eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
@@ -529,19 +528,29 @@ const SuratKeluar: React.FC = () => {
             <Title level={2} style={{ margin: 0 }}>
               <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
               Surat Keluar
+              <span style={{
+                fontSize: '16px',
+                backgroundColor: '#1890ff',
+                color: 'white',
+                borderRadius: '12px',
+                padding: '2px 10px',
+                marginLeft: '12px',
+                display: 'inline-block',
+                verticalAlign: 'middle'
+              }}>
+                {data.length}
+              </span>
             </Title>
             <Text type="secondary">Kelola semua surat keluar Anda di sini</Text>
           </div>
-          <Badge count={data.length}>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setIsModalVisible(true)}
-              size="large"
-            >
-              Tambah Surat
-            </Button>
-          </Badge>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setIsModalVisible(true)}
+            size="large"
+          >
+            Tambah Surat
+          </Button>
         </div>
 
         <div style={{ marginBottom: 16 }}>
