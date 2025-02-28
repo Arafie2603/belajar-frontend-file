@@ -34,6 +34,7 @@ import { useAuth } from '../hooks/useAuth';
 import { eventBus, DATA_EVENTS } from '../utils/eventBus';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import dayjs from 'dayjs';
+import { useNavigate } from 'react-router-dom';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -117,9 +118,9 @@ const NotulenForm: React.FC<FormProps> = ({
             setFileList(info.fileList);
         },
         beforeUpload: (file) => {
-            const isValidType = file.type === "application/pdf" || 
-                               file.type.startsWith("image/") || 
-                               file.type.includes("word");
+            const isValidType = file.type === "application/pdf" ||
+                file.type.startsWith("image/") ||
+                file.type.includes("word");
             const isValidSize = file.size / 1024 / 1024 < 5;
 
             if (!isValidType) {
@@ -212,8 +213,8 @@ const NotulenForm: React.FC<FormProps> = ({
                     label="Tanggal Rapat"
                     rules={[{ required: true, message: 'Mohon pilih tanggal rapat!' }]}
                 >
-                    <DatePicker 
-                        style={{ width: '100%' }} 
+                    <DatePicker
+                        style={{ width: '100%' }}
                         placeholder="Pilih tanggal rapat"
                         format="DD-MM-YYYY"
                     />
@@ -290,8 +291,9 @@ const NotulenDetailModal: React.FC<{
 }> = ({ visible, onCancel, record }) => {
     if (!record) return null;
 
+
     // Format the date for display
-    const formattedDate = record.tanggal_rapat 
+    const formattedDate = record.tanggal_rapat
         ? dayjs(record.tanggal_rapat).format('DD MMMM YYYY')
         : '-';
 
@@ -353,9 +355,9 @@ const NotulenDetailModal: React.FC<{
                     <strong>Dokumen Lampiran:</strong>
                     <div style={{ marginTop: '12px' }}>
                         {record.dokumen_lampiran && (
-                            record.dokumen_lampiran.toLowerCase().endsWith('.pdf') || 
-                            record.dokumen_lampiran.toLowerCase().endsWith('.doc') || 
-                            record.dokumen_lampiran.toLowerCase().endsWith('.docx') ? (
+                            record.dokumen_lampiran.toLowerCase().endsWith('.pdf') ||
+                                record.dokumen_lampiran.toLowerCase().endsWith('.doc') ||
+                                record.dokumen_lampiran.toLowerCase().endsWith('.docx') ? (
                                 <a href={record.dokumen_lampiran} target="_blank" rel="noopener noreferrer">
                                     <Button type="primary" icon={<FileTextOutlined />}>
                                         Lihat Dokumen
@@ -385,6 +387,8 @@ const Notulen: React.FC = () => {
     const [searchText, setSearchText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://api-efiling.vercel.app/';
+    const navigate = useNavigate();
+
 
     const {
         data,
@@ -432,17 +436,8 @@ const Notulen: React.FC = () => {
         }
     };
 
-    const handleViewDetail = async (record: NotulenType) => {
-        try {
-            const currentNotulen = await fetchNotulenById(record.id);
-            if (currentNotulen) {
-                setCurrentRecord(currentNotulen as NotulenType);
-                setIsDetailModalVisible(true);
-            }
-        } catch (err) {
-            const error = err as Error;
-            message.error('Gagal mengambil data notulen: ' + (error.message || 'Unknown error'));
-        }
+    const handleViewDetail = (record: NotulenType) => {
+        navigate(`/dashboard/notulen/${record.id}`);
     };
 
     const handleDelete = async (id: string) => {

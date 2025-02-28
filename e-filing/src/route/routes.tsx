@@ -12,6 +12,7 @@ const SuratMasuk = lazy(() => import('../pages/SuratMasukPage'));
 const DetailSuratMasuk = lazy(() => import('../pages/DetailSuratMasuk'));
 const Faktur = lazy(() => import('../pages/FakturPage'));
 const Notulen = lazy(() => import('../pages/NotulenPage'));
+const DetailNotulen = lazy(() => import('../pages/DetailNotulen'));
 
 // Custom loading wrapper component
 const SuspenseWrapper: React.FC<{ children: ReactNode }> = ({ children }) => (
@@ -82,6 +83,14 @@ const routes: RouteObject[] = [
                 element: (
                     <SuspenseWrapper>
                         <Notulen />
+                    </SuspenseWrapper>
+                )
+            },
+            {
+                path: 'notulen/:id',
+                element: (
+                    <SuspenseWrapper>
+                        <DetailNotulen />
                     </SuspenseWrapper>
                 )
             },
