@@ -54,8 +54,6 @@ interface DataType {
   keterangan_gambar: string;
   sifat_surat: string;
   keterangan?: string;
-  deskripsi?: string;
-  kategori?: string;
 }
 
 interface FormProps {
@@ -79,13 +77,11 @@ const SuratForm: React.FC<FormProps> = ({
   const [editorData, setEditorData] = useState('');
   const [fileList, setFileList] = useState<any[]>([]);
 
-  // Reset form when modal visibility changes or initialValues change
   useEffect(() => {
     if (visible) {
       form.resetFields();
 
       if (initialValues) {
-        // Format the date for DatePicker
         const formattedValues = {
           ...initialValues,
           tanggal: initialValues.tanggal ? dayjs(initialValues.tanggal, 'DD/MM/YYYY') : undefined
@@ -94,7 +90,6 @@ const SuratForm: React.FC<FormProps> = ({
         form.setFieldsValue(formattedValues);
         setEditorData(initialValues.isi_surat || '');
 
-        // Set file list if there's an existing image
         if (initialValues.gambar) {
           setFileList([
             {
@@ -292,7 +287,11 @@ const SuratForm: React.FC<FormProps> = ({
           label="Sifat Surat"
           rules={[{ required: true, message: 'Mohon isi sifat surat!' }]}
         >
-          <Input placeholder="Masukkan sifat surat" />
+          <Select placeholder="Pilih keterangan">
+            <Select.Option value="penting">penting</Select.Option>
+            <Select.Option value="biasa saja">biasa saja</Select.Option>
+            <Select.Option value="rahasia">rahasia</Select.Option>
+          </Select>
         </Form.Item>
 
         <Form.Item
@@ -302,6 +301,9 @@ const SuratForm: React.FC<FormProps> = ({
         >
           <Select placeholder="Pilih keterangan">
             <Select.Option value="H">H</Select.Option>
+            <Select.Option value="SA">SA</Select.Option>
+            <Select.Option value="SS">SS</Select.Option>
+            <Select.Option value="P">P</Select.Option>
           </Select>
         </Form.Item>
       </Form>

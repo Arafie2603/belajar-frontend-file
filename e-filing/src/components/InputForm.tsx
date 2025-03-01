@@ -21,8 +21,9 @@ export interface SuratFormValues {
     sifat_surat: string;
     tanggal_penyelesaian: Dayjs;
     isi_disposisi: string;
-    alamat: string; // Menambahkan field alamat
+    alamat: string; 
     scan_surat?: File;
+    diteruskan_kepada: string;
 }
 
 interface InputFormProps {
@@ -246,6 +247,13 @@ export const InputForm: React.FC<InputFormProps> = ({
                     rules={[{ required: true, message: 'Mohon masukkan disposisi surat!' }]}
                 >
                     <Input placeholder="Mohon masukkan disposisi surat!" />
+                </Form.Item>
+                <Form.Item
+                    name="diteruskan_kepada"
+                    label="Diteruskan Kepada"
+                    rules={[{ required: true, message: 'Mohon masukkan bagian diteruskan kepada!' }]}
+                >
+                    <Input placeholder="Mohon masukkan diteruskan kepada!" />
                 </Form.Item>
 
                 <Form.Item 
