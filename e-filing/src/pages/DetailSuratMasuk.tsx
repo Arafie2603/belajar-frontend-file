@@ -5,13 +5,13 @@ import { Document, Page } from 'react-pdf';
 import "../pdfworker";
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
-import { 
-    FileTextOutlined, 
-    CalendarOutlined, 
-    UserOutlined, 
-    AimOutlined, 
-    MailOutlined, 
-    EyeOutlined, 
+import {
+    FileTextOutlined,
+    CalendarOutlined,
+    UserOutlined,
+    AimOutlined,
+    MailOutlined,
+    EyeOutlined,
     DownloadOutlined,
     NumberOutlined
 } from '@ant-design/icons';
@@ -60,7 +60,7 @@ const DetailItem: React.FC<DetailItemProps> = ({ icon, label, value }) => (
         alignItems: 'center',
         width: "100%"
     }}
-    className="hover:bg-gray-100"
+        className="hover:bg-gray-100"
     >
         <div style={{ color: '#1890ff', fontSize: '20px', marginRight: '16px' }}>
             {icon}
@@ -144,14 +144,14 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ filename }) => {
                     <div>
                         <Text strong>Page {pageNumber} of {numPages || 0}</Text>
                         <div style={{ marginTop: '10px' }}>
-                            <Button 
+                            <Button
                                 onClick={previousPage}
                                 disabled={pageNumber <= 1}
                                 style={{ marginRight: '8px' }}
                             >
                                 Previous
                             </Button>
-                            <Button 
+                            <Button
                                 onClick={nextPage}
                                 disabled={pageNumber >= (numPages || 0)}
                             >
@@ -160,7 +160,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ filename }) => {
                         </div>
                     </div>
                     {viewUrl && (
-                        <Button 
+                        <Button
                             type="primary"
                             href={viewUrl}
                             target="_blank"
@@ -263,23 +263,16 @@ const DetailSuratMasuk: React.FC = () => {
 
     if (isLoading) {
         return (
-            <div style={{ 
-                height: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                backgroundColor: '#f0f2f5'
-            }}>
-                <Spin size="large" />
-                <Text style={{ marginTop: '16px' }}>Memuat data surat...</Text>
+            <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50">
+                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+                <p className="mt-4 text-gray-600">Memuat data surat...</p>
             </div>
         );
     }
 
     if (error || !surat) {
         return (
-            <div style={{ 
+            <div style={{
                 height: '100vh',
                 display: 'flex',
                 justifyContent: 'center',
@@ -297,12 +290,12 @@ const DetailSuratMasuk: React.FC = () => {
     }
 
     return (
-        <div style={{ 
+        <div style={{
             minHeight: '100vh',
             backgroundColor: '#f0f2f5',
             padding: '32px'
         }}>
-            <Card 
+            <Card
                 style={{
                     maxWidth: '100%',
                     margin: '0 auto',
@@ -324,7 +317,7 @@ const DetailSuratMasuk: React.FC = () => {
                     label="Nomor Surat"
                     value={surat.no_surat_masuk}
                 />
-                
+
                 <DetailItem
                     icon={<CalendarOutlined />}
                     label="Tanggal"
@@ -400,7 +393,7 @@ const DetailSuratMasuk: React.FC = () => {
                 width="50%"
                 style={{ top: 20 }}
                 styles={{
-                    body: { 
+                    body: {
                         padding: '24px',
                         maxHeight: '80vh',
                         overflow: 'auto',

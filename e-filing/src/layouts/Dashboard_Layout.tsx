@@ -1,18 +1,37 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import {
     DesktopOutlined,
     FileOutlined,
     TeamOutlined,
     UserOutlined,
-    LogoutOutlined
+    LogoutOutlined,
+    BellOutlined,
+    SettingOutlined,
+    MenuFoldOutlined,
+    MenuUnfoldOutlined,
+    MailOutlined,
+    FileTextOutlined,
+    DollarOutlined,
+    FileSearchOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
-import { Layout, Menu, theme, Button, Flex, message, Spin } from 'antd';
+import {
+    Layout,
+    Menu,
+    theme,
+    Button,
+    Flex,
+    message,
+    Avatar,
+    Badge,
+    Dropdown,
+    Typography,
+} from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
-const { Header, Footer, Sider } = Layout;
+const { Header, Footer, Sider, Content } = Layout;
+const { Title, Text } = Typography;
 
 type MenuItem = Required<MenuProps>['items'][number];
 
@@ -38,9 +57,9 @@ const DashboardLayout: React.FC = () => {
     const { isAuthenticated, isLoading, logout } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
-    
+
     const {
-        token: { colorBgContainer },
+        token: { colorBgContainer, colorPrimary, borderRadiusLG },
     } = theme.useToken();
 
     useEffect(() => {
@@ -61,7 +80,8 @@ const DashboardLayout: React.FC = () => {
             'faktur': '5',
             'team-1': '6',
             'team-2': '7',
-            'files': '8'
+            'files': '8',
+            'profile': '9'
         };
         if (path && pathToKey[path]) {
             setSelectedKey(pathToKey[path]);
@@ -70,17 +90,10 @@ const DashboardLayout: React.FC = () => {
 
     if (isLoading) {
         return (
-            <Layout style={{ minHeight: '100vh' }}>
-                <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'center', 
-                    alignItems: 'center', 
-                    height: '100%',
-                    width: '100%' 
-                }}>
-                    <Spin size="large" />
-                </div>
-            </Layout>
+            <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50">
+                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+                <p className="mt-4 text-gray-600">Loading...</p>
+            </div>
         );
     }
 
@@ -90,17 +103,19 @@ const DashboardLayout: React.FC = () => {
             message.success('Berhasil logout');
             navigate('/');
         } catch (error) {
+            console.error('Logout error:', error);
             message.error('Gagal logout');
         }
     };
 
+
     const getMenuItems = (navigate: (path: string) => void): MenuItem[] => [
         getItem('Dashboard', '1', <DesktopOutlined />, undefined, () => navigate('/dashboard')),
-        getItem('Data Transaksi', 'sub1', <UserOutlined />, [
-            getItem('Surat Masuk', '2', undefined, undefined, () => navigate('/dashboard/surat-masuk')),
-            getItem('Surat Keluar', '3', undefined, undefined, () => navigate('/dashboard/surat-keluar')),
-            getItem('Notulen', '4', undefined, undefined, () => navigate('/dashboard/notulen')),
-            getItem('Faktur', '5', undefined, undefined, () => navigate('/dashboard/faktur')),
+        getItem('Data Transaksi', 'sub1', <FileSearchOutlined />, [
+            getItem('Surat Masuk', '2', <MailOutlined style={{ color: '#52c41a' }} />, undefined, () => navigate('/dashboard/surat-masuk')),
+            getItem('Surat Keluar', '3', <MailOutlined style={{ color: '#1890ff' }} />, undefined, () => navigate('/dashboard/surat-keluar')),
+            getItem('Notulen', '4', <FileTextOutlined style={{ color: '#722ed1' }} />, undefined, () => navigate('/dashboard/notulen')),
+            getItem('Faktur', '5', <DollarOutlined style={{ color: '#fa541c' }} />, undefined, () => navigate('/dashboard/faktur')),
         ]),
         getItem('Team', 'sub2', <TeamOutlined />, [
             getItem('Team 1', '6', undefined, undefined, () => navigate('/dashboard/team-1')),
@@ -109,42 +124,125 @@ const DashboardLayout: React.FC = () => {
         getItem('Files', '8', <FileOutlined />, undefined, () => navigate('/dashboard/files')),
     ];
 
+    const userMenuItems: MenuProps['items'] = [
+        {
+            key: '1',
+            label: 'Profile',
+            icon: <UserOutlined />,
+            onClick: () => navigate('/dashboard/profile'),
+        },
+        {
+            key: '2',
+            label: 'Settings',
+            icon: <SettingOutlined />,
+            onClick: () => navigate('/dashboard/settings'),
+        },
+        {
+            type: 'divider',
+        },
+        {
+            key: '3',
+            label: 'Logout',
+            icon: <LogoutOutlined />,
+            onClick: handleLogout,
+        },
+    ];
+
     if (!isAuthenticated) {
         return null;
     }
 
     return (
         <Layout style={{ minHeight: '100vh' }}>
-            <Sider collapsible collapsed={collapsed} onCollapse={(value) => setCollapsed(value)}>
-                <div className="demo-logo-vertical" />
-                <Menu 
-                    theme="dark" 
+            <Sider
+                collapsible
+                collapsed={collapsed}
+                onCollapse={(value) => setCollapsed(value)}
+                style={{
+                    boxShadow: '2px 0 8px 0 rgba(29, 35, 41, 0.05)',
+                    background: '#001529'
+                }}
+                width={260}
+                breakpoint="lg"
+                collapsedWidth={80}
+                trigger={null}
+            >
+                <div style={{
+                    height: '64px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: collapsed ? 'center' : 'flex-start',
+                    padding: collapsed ? '0' : '0 16px',
+                    color: '#fff',
+                    backgroundColor: '#002140'
+                }}>
+                    {collapsed ? (
+                        <FileTextOutlined style={{ fontSize: '24px' }} />
+                    ) : (
+                        <Title level={4} style={{ color: '#fff', margin: 0 }}>E-Filing System</Title>
+                    )}
+                </div>
+                <Menu
+                    theme="dark"
                     selectedKeys={[selectedKey]}
-                    mode="inline" 
-                    items={getMenuItems(navigate)} 
+                    mode="inline"
+                    items={getMenuItems(navigate)}
+                    style={{ borderRight: 0 }}
                 />
             </Sider>
             <Layout>
-                <Header style={{ padding: 0, background: colorBgContainer }}>
-                    <Flex
-                        style={{ padding: 0, width: '100%', height: '100%' }}
-                        wrap
-                        gap="middle"
-                        justify='flex-end'
-                        align='center'
-                    >
-                        <Button
-                            danger
-                            icon={<LogoutOutlined />}
-                            style={{ marginRight: '20px' }}
-                            onClick={handleLogout}
-                        >
-                            Logout
-                        </Button>
+                <Header style={{
+                    padding: '0 16px',
+                    background: colorBgContainer,
+                    boxShadow: '0 1px 4px rgba(0, 21, 41, 0.08)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    height: '64px'
+                }}>
+                    <Button
+                        type="text"
+                        icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                        onClick={() => setCollapsed(!collapsed)}
+                        style={{ fontSize: '16px', width: 64, height: 64 }}
+                    />
+                    <Flex align="center" gap="middle">
+                        <Badge count={5}>
+                            <Button shape="circle" icon={<BellOutlined />} />
+                        </Badge>
+                        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+                            <Button type="text" style={{ height: '48px', padding: '0 8px' }}>
+                                <Flex align="center" gap="small">
+                                    <Avatar
+                                        style={{ backgroundColor: colorPrimary }}
+                                        icon={<UserOutlined />}
+                                    />
+                                    {!collapsed && (
+                                        <div style={{ lineHeight: 1.2 }}>
+                                            <div style={{ fontWeight: 'bold' }}>Aralasia</div>
+                                            <Text type="secondary" style={{ fontSize: '12px' }}>user</Text>
+                                        </div>
+                                    )}
+                                </Flex>
+                            </Button>
+                        </Dropdown>
                     </Flex>
                 </Header>
-                <Outlet />
-                <Footer style={{ textAlign: 'center' }}>
+                <Content style={{
+                    margin: '16px',
+                    padding: 0,
+                    minHeight: 280,
+                    borderRadius: borderRadiusLG,
+                    overflowY: 'auto'
+                }}>
+                    <Outlet />
+                </Content>
+                <Footer style={{
+                    textAlign: 'center',
+                    padding: '16px',
+                    backgroundColor: colorBgContainer,
+                    borderTop: '1px solid rgba(0, 0, 0, 0.06)'
+                }}>
                     E-Filing ©{new Date().getFullYear()} Created by LAB ICT
                 </Footer>
             </Layout>

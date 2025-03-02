@@ -5,7 +5,7 @@ import { useAuth } from './useAuth';
 interface NotulenType {
     id: string;
     judul: string;
-    tanggal_rapat: string;
+    tanggal: string;
     lokasi: string;
     pemimpin_rapat: string;
     peserta: string;

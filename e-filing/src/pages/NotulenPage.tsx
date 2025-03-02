@@ -16,7 +16,10 @@ import {
     Upload,
     Alert,
     Image,
-    DatePicker
+    DatePicker,
+    Select,
+    Divider,
+    Tag
 } from 'antd';
 import {
     PlusOutlined,
@@ -26,7 +29,8 @@ import {
     InboxOutlined,
     FileTextOutlined,
     SearchOutlined,
-    FileProtectOutlined
+    FileProtectOutlined,
+    UserOutlined
 } from '@ant-design/icons';
 import { UploadProps } from 'antd';
 import { useNotulenCache } from '../hooks/useNotulenCache';
@@ -40,14 +44,44 @@ const { Content } = Layout;
 const { Title, Text } = Typography;
 const { Dragger } = Upload;
 const { TextArea } = Input;
+const { Option } = Select;
+
+// Add the missing UserType interface
+interface UserType {
+    id: string;
+    name: string;
+    email?: string;
+    role?: string;
+}
+
+interface User {
+    id: string;
+    name: string;
+    email?: string; // Tidak ada di response, buat opsional
+    role: string;
+    fakultas: string;
+    prodi: string;
+    foto?: string;
+    alamat?: string;
+    jabatan?: string;
+    no_telp?: string;
+}
+
+
+interface Participant {
+    id?: string;
+    name: string;
+    type: 'registered' | 'custom';
+}
 
 interface NotulenType {
     id: string;
     judul: string;
-    tanggal_rapat: string;
+    tanggal: string;
     lokasi: string;
     pemimpin_rapat: string;
     peserta: string;
+    peserta_list?: Participant[];
     agenda: string;
     dokumen_lampiran: string;
     status: string;
@@ -65,7 +99,8 @@ interface FormProps {
     isEdit?: boolean;
 }
 
-const NotulenForm: React.FC<FormProps> = ({
+// Export component for React Fast Refresh
+export const NotulenForm: React.FC<FormProps> = ({
     visible,
     onCancel,
     onSubmit,
@@ -75,20 +110,98 @@ const NotulenForm: React.FC<FormProps> = ({
 }) => {
     const [form] = Form.useForm();
     const [fileList, setFileList] = useState<any[]>([]);
+    const [users, setUsers] = useState<UserType[]>([]);
+    const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+    const [customParticipants, setCustomParticipants] = useState<string[]>([]);
+    const [customParticipantInput, setCustomParticipantInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://api-efiling.vercel.app/';
 
-    // Reset form when modal visibility changes or initialValues change
+
+    const fetchUsers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                console.error('No authentication token found');
+                return;
+            }
+
+            console.log('Fetching users from:', `${BASE_URL}api/users`);
+
+            const response = await axios.get(`${BASE_URL}api/users`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            console.log('Users API response:', response.data);
+
+            if (response.data?.data?.paginatedData && Array.isArray(response.data.data.paginatedData)) {
+                const userData: User[] = response.data.data.paginatedData.map((user: any): User => ({
+                    id: user.id,
+                    name: user.nama,
+                    role: user.role,
+                    fakultas: user.fakultas,
+                    prodi: user.prodi,
+                    foto: user.foto || "",
+                    alamat: user.alamat || "",
+                    jabatan: user.jabatan || "",
+                    no_telp: user.no_telp || ""
+                }));
+                setUsers(userData);
+            } else {
+                console.error('Unexpected API response format:', response.data);
+                setUsers([]);
+            }
+        } catch (error) {
+            console.error('Failed to fetch users:', error);
+            if (axios.isAxiosError(error)) {
+                console.error('Response:', error.response?.data);
+                console.error('Status:', error.response?.status);
+            }
+            setUsers([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [BASE_URL]);
+
+
     useEffect(() => {
         if (visible) {
+            fetchUsers();
             form.resetFields();
 
             if (initialValues) {
-                const formValues = {
-                    ...initialValues,
-                    tanggal_rapat: initialValues.tanggal_rapat ? dayjs(initialValues.tanggal_rapat) : null
-                };
-                form.setFieldsValue(formValues);
+                console.log('Modal opened, fetching users...');
+                fetchUsers();
 
-                // Set file list if there's an existing document
+                form.resetFields();
+
+                if (initialValues.peserta) {
+                    try {
+                        const parsedParticipants = JSON.parse(initialValues.peserta);
+                        if (Array.isArray(parsedParticipants)) {
+                            const userIds = parsedParticipants
+                                .filter(p => typeof p === 'object' && p.type === 'registered')
+                                .map(p => typeof p === 'object' && p.id ? p.id : '');
+
+                            setSelectedUsers(userIds.filter(id => id !== ''));
+
+                            const customParts = parsedParticipants
+                                .filter(p => typeof p === 'object' && p.type === 'custom')
+                                .map(p => typeof p === 'object' && p.name ? p.name : '');
+
+                            setCustomParticipants(customParts.filter(name => name !== ''));
+                        } else {
+                            setCustomParticipants(initialValues.peserta.split('\n').filter(p => p.trim()));
+                        }
+                    } catch (error) {
+                        console.error('JSON Parsing Error:', error);
+                        setCustomParticipants(initialValues.peserta.split('\n').filter(p => p.trim()));
+                    }
+                }
+
                 if (initialValues.dokumen_lampiran) {
                     setFileList([
                         {
@@ -103,10 +216,12 @@ const NotulenForm: React.FC<FormProps> = ({
                     setFileList([]);
                 }
             } else {
+                setSelectedUsers([]);
+                setCustomParticipants([]);
                 setFileList([]);
             }
         }
-    }, [visible, initialValues, form]);
+    }, [visible, initialValues, form, fetchUsers]);
 
     const uploadProps: UploadProps = {
         name: "dokumen_lampiran",
@@ -124,17 +239,38 @@ const NotulenForm: React.FC<FormProps> = ({
             const isValidSize = file.size / 1024 / 1024 < 5;
 
             if (!isValidType) {
-                message.error("Hanya mendukung file PDF, Word, dan gambar!");
+                Modal.error({
+                    title: "Format Tidak Didukung",
+                    content: "Hanya mendukung file PDF, Word, dan gambar!"
+                });
                 return Upload.LIST_IGNORE;
             }
 
             if (!isValidSize) {
-                message.error("Ukuran file tidak boleh lebih dari 5MB!");
+                Modal.error({
+                    title: "Ukuran File Terlalu Besar",
+                    content: "Ukuran file tidak boleh lebih dari 5MB!"
+                });
                 return Upload.LIST_IGNORE;
             }
 
             return false;
         },
+    };
+
+    const handleAddCustomParticipant = () => {
+        if (customParticipantInput && !customParticipants.includes(customParticipantInput)) {
+            setCustomParticipants([...customParticipants, customParticipantInput]);
+            setCustomParticipantInput('');
+        }
+    };
+
+    const handleRemoveCustomParticipant = (participant: string) => {
+        setCustomParticipants(customParticipants.filter(p => p !== participant));
+    };
+
+    const handleRemoveSelectedUser = (userId: string) => {
+        setSelectedUsers(selectedUsers.filter(id => id !== userId));
     };
 
     const handleSubmit = (values: any) => {
@@ -143,15 +279,41 @@ const NotulenForm: React.FC<FormProps> = ({
         // Format the date before adding to FormData
         const formattedValues = {
             ...values,
-            tanggal_rapat: values.tanggal_rapat ? values.tanggal_rapat.format('YYYY-MM-DD') : ''
+            tanggal: values.tanggal ? values.tanggal.format('YYYY-MM-DD') : ''
         };
+
+        // Create a structured participant list
+        const participantsList = [
+            // Add selected registered users
+            ...selectedUsers.map(userId => {
+                const user = users.find(u => u.id === userId);
+                return { id: userId, name: user?.name, type: 'registered' };
+            }),
+            // Add custom participants
+            ...customParticipants.map(name => ({ name, type: 'custom' }))
+        ];
+
+        // Create a formatted string for backward compatibility
+        const participantsText = [
+            // Add registered users names
+            ...selectedUsers.map(userId => {
+                const user = users.find(u => u.id === userId);
+                return user ? user.name : '';
+            }).filter(Boolean),
+            // Add custom participants
+            ...customParticipants
+        ].join('\n');
 
         // Add all form values to FormData
         Object.entries(formattedValues).forEach(([key, value]: [string, any]) => {
-            if (value !== undefined && value !== null) {
+            if (key !== 'peserta' && value !== undefined && value !== null) {
                 formData.append(key, value);
             }
         });
+
+        // Add participants data in two formats
+        formData.append('peserta', participantsText);
+        formData.append('peserta_list', JSON.stringify(participantsList));
 
         // Add file if a new file has been selected
         if (fileList.length > 0 && fileList[0].originFileObj) {
@@ -178,9 +340,11 @@ const NotulenForm: React.FC<FormProps> = ({
             onCancel={() => {
                 form.resetFields();
                 setFileList([]);
+                setSelectedUsers([]);
+                setCustomParticipants([]);
                 onCancel();
             }}
-            width={700}
+            width={800}
             footer={[
                 <Button key="back" onClick={onCancel}>
                     Batal
@@ -209,7 +373,7 @@ const NotulenForm: React.FC<FormProps> = ({
                 </Form.Item>
 
                 <Form.Item
-                    name="tanggal_rapat"
+                    name="tanggal"
                     label="Tanggal Rapat"
                     rules={[{ required: true, message: 'Mohon pilih tanggal rapat!' }]}
                 >
@@ -236,12 +400,111 @@ const NotulenForm: React.FC<FormProps> = ({
                     <Input placeholder="Masukkan nama pemimpin rapat" />
                 </Form.Item>
 
+                {/* Participants Section */}
+                <Divider orientation="left">Peserta Rapat</Divider>
+
                 <Form.Item
-                    name="peserta"
-                    label="Peserta"
-                    rules={[{ required: true, message: 'Mohon isi daftar peserta rapat!' }]}
+                    label="Pilih dari Pengguna Terdaftar"
+                    help="Pilih satu atau lebih peserta dari pengguna yang terdaftar"
                 >
-                    <TextArea rows={3} placeholder="Masukkan daftar peserta rapat" />
+                    <Select
+                        mode="multiple"
+                        placeholder={loading ? "Memuat data pengguna..." : "Pilih peserta"}
+                        loading={loading}
+                        style={{ width: '100%' }}
+                        allowClear
+                        value={selectedUsers}
+                        onChange={(values) => setSelectedUsers(values)}
+                        optionFilterProp="children"
+                        notFoundContent={loading ? "Memuat data..." : "Tidak ada data pengguna"}
+                    >
+                        {Array.isArray(users) && users.length > 0 ? (
+                            users.map(user => (
+                                <Option key={user.id} value={user.id}>
+                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                        <UserOutlined style={{ marginRight: 8 }} />
+                                        <span>{user.name}</span>
+                                        {user.role && <Text type="secondary" style={{ marginLeft: 8 }}>({user.role})</Text>}
+                                    </div>
+                                </Option>
+                            ))
+                        ) : (
+                            <Option disabled value="">Tidak ada pengguna tersedia</Option>
+                        )}
+                    </Select>
+                    {users.length === 0 && !loading && (
+                        <Alert
+                            message="Tidak ada data pengguna"
+                            description="Tidak dapat memuat data pengguna. Pastikan Anda memiliki koneksi internet yang stabil dan API berfungsi dengan baik."
+                            type="warning"
+                            showIcon
+                            style={{ marginTop: 8 }}
+                        />
+                    )}
+                </Form.Item>
+
+                {/* Display selected users as Tags */}
+                {selectedUsers.length > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                        <Text strong>Pengguna yang dipilih:</Text>
+                        <div style={{ marginTop: 8 }}>
+                            {selectedUsers.map(userId => {
+                                const user = users.find(u => u.id === userId);
+                                return (
+                                    <Tag
+                                        key={userId}
+                                        closable
+                                        onClose={() => handleRemoveSelectedUser(userId)}
+                                        style={{ marginBottom: 8 }}
+                                        color="blue"
+                                    >
+                                        <UserOutlined style={{ marginRight: 4 }} />
+                                        {user?.name || 'Unknown User'}
+                                    </Tag>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                <Form.Item
+                    label="Tambah Peserta Lainnya"
+                    help="Tambahkan peserta yang tidak terdaftar dalam sistem"
+                >
+                    <Space style={{ display: 'flex', marginBottom: 8 }}>
+                        <Input
+                            placeholder="Nama peserta"
+                            value={customParticipantInput}
+                            onChange={e => setCustomParticipantInput(e.target.value)}
+                            onPressEnter={handleAddCustomParticipant}
+                        />
+                        <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={handleAddCustomParticipant}
+                        >
+                            Tambah
+                        </Button>
+                    </Space>
+
+                    {customParticipants.length > 0 && (
+                        <div style={{ marginTop: 8 }}>
+                            <Text strong>Peserta tambahan:</Text>
+                            <div style={{ marginTop: 8 }}>
+                                {customParticipants.map((participant, index) => (
+                                    <Tag
+                                        key={index}
+                                        closable
+                                        onClose={() => handleRemoveCustomParticipant(participant)}
+                                        style={{ marginBottom: 8 }}
+                                        color="green"
+                                    >
+                                        {participant}
+                                    </Tag>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </Form.Item>
 
                 <Form.Item
@@ -284,18 +547,61 @@ const NotulenForm: React.FC<FormProps> = ({
     );
 };
 
-const NotulenDetailModal: React.FC<{
+export const NotulenDetailModal: React.FC<{
     visible: boolean;
     onCancel: () => void;
     record: NotulenType | null;
 }> = ({ visible, onCancel, record }) => {
     if (!record) return null;
 
-
-    // Format the date for display
-    const formattedDate = record.tanggal_rapat
-        ? dayjs(record.tanggal_rapat).format('DD MMMM YYYY')
+    const formattedDate = record.tanggal
+        ? dayjs(record.tanggal).format('DD MMMM YYYY')
         : '-';
+
+    const displayParticipants = () => {
+        if (!record.peserta) return null;
+
+        let participants: Participant[] = [];
+
+        try {
+            const parsed = JSON.parse(record.peserta);
+            if (Array.isArray(parsed)) {
+                participants = parsed;
+            } else {
+                return (
+                    <div style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>
+                        {record.peserta}
+                    </div>
+                );
+            }
+        } catch {
+            return (
+                <div style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>
+                    {record.peserta}
+                </div>
+            );
+        }
+
+
+        return (
+            <div style={{ marginTop: '8px' }}>
+                <ul style={{ paddingLeft: '20px', margin: 0 }}>
+                    {participants.map((participant, index) => (
+                        <li key={index} style={{ marginBottom: '4px' }}>
+                            {participant.type === 'registered' ? (
+                                <Tag color="blue">
+                                    <UserOutlined style={{ marginRight: 4 }} />
+                                    {participant.name}
+                                </Tag>
+                            ) : (
+                                <Tag color="green">{participant.name}</Tag>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        );
+    };
 
     return (
         <Modal
@@ -335,7 +641,7 @@ const NotulenDetailModal: React.FC<{
                 </div>
                 <div style={{ marginBottom: '16px' }}>
                     <strong>Peserta:</strong>
-                    <p style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>{record.peserta}</p>
+                    {displayParticipants()}
                 </div>
                 <div style={{ marginBottom: '16px' }}>
                     <strong>Agenda:</strong>
@@ -378,7 +684,8 @@ const NotulenDetailModal: React.FC<{
     );
 };
 
-const Notulen: React.FC = () => {
+// Export the main component (fixing the "Notulen is assigned a value but never used" error)
+export default function NotulenPage() {
     const { isAuthenticated, token } = useAuth();
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [isEditModalVisible, setIsEditModalVisible] = useState(false);
@@ -551,8 +858,8 @@ const Notulen: React.FC = () => {
         },
         {
             title: 'Tanggal Rapat',
-            dataIndex: 'tanggal_rapat',
-            key: 'tanggal_rapat',
+            dataIndex: 'tanggal',
+            key: 'tanggal',
             align: 'center' as const,
             render: (date: string) => dayjs(date).format('DD/MM/YYYY')
         },
@@ -597,7 +904,6 @@ const Notulen: React.FC = () => {
                     </Tooltip>
                     <Tooltip title="Hapus">
                         <Button
-                            type="primary"
                             danger
                             icon={<DeleteOutlined />}
                             onClick={() => handleDelete(record.id)}
@@ -609,95 +915,68 @@ const Notulen: React.FC = () => {
     ];
 
     return (
-        <Content style={{ margin: '16px' }}>
-            <Card className="shadow-sm">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                    <div>
-                        <Title level={2} style={{ margin: 0 }}>
-                            <FileProtectOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                            Notulen
-                            <span style={{
-                                fontSize: '16px',
-                                backgroundColor: '#1890ff',
-                                color: 'white',
-                                borderRadius: '12px',
-                                padding: '2px 10px',
-                                marginLeft: '12px',
-                                display: 'inline-block',
-                                verticalAlign: 'middle'
-                            }}>
-                                {notulenData.length}
-                            </span>
+        <Layout>
+            <Content style={{ padding: '24px', minHeight: 'calc(100vh - 64px)' }}>
+                <Card>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                        <Title level={4}>
+                            <FileProtectOutlined /> Daftar Notulen
                         </Title>
-                        <Text type="secondary">Kelola semua notulen rapat Anda di sini</Text>
+                        <div>
+                            <Input
+                                placeholder="Cari notulen..."
+                                value={searchText}
+                                onChange={(e) => setSearchText(e.target.value)}
+                                style={{ width: 250, marginRight: 16 }}
+                                prefix={<SearchOutlined />}
+                            />
+                            <Button
+                                type="primary"
+                                icon={<PlusOutlined />}
+                                onClick={() => {
+                                    setCurrentRecord(null);
+                                    setIsModalVisible(true);
+                                }}
+                            >
+                                Tambah Notulen
+                            </Button>
+                        </div>
                     </div>
-                    <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={() => setIsModalVisible(true)}
-                        size="large"
-                    >
-                        Tambah Notulen
-                    </Button>
-                </div>
 
-                <div style={{ marginBottom: 16 }}>
-                    <Input
-                        placeholder="Cari notulen..."
-                        prefix={<SearchOutlined />}
-                        onChange={(e) => setSearchText(e.target.value)}
-                        style={{ width: 300 }}
-                        allowClear
+                    <Table
+                        dataSource={filteredData}
+                        columns={columns}
+                        rowKey="id"
+                        pagination={{
+                            pageSize: 10,
+                            showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} item`,
+                        }}
+                        scroll={{ x: 'max-content' }}
                     />
-                </div>
+                </Card>
 
-                <Table
-                    columns={columns}
-                    dataSource={filteredData}
-                    rowKey="id"
-                    loading={loading}
-                    pagination={{
-                        pageSize: 10,
-                        showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} notulen`,
-                        showSizeChanger: true,
-                        showQuickJumper: true,
-                    }}
-                    scroll={{ x: 'max-content' }}
+                <NotulenForm
+                    visible={isModalVisible}
+                    onCancel={() => setIsModalVisible(false)}
+                    onSubmit={handleSubmit}
+                    submitting={submitting}
                 />
-            </Card>
 
-            {/* Create Form Modal */}
-            <NotulenForm
-                visible={isModalVisible}
-                onCancel={() => setIsModalVisible(false)}
-                onSubmit={handleSubmit}
-                submitting={submitting}
-            />
+                <NotulenForm
+                    visible={isEditModalVisible}
+                    onCancel={() => setIsEditModalVisible(false)}
+                    onSubmit={handleUpdate}
+                    submitting={submitting}
+                    initialValues={currentRecord}
+                    isEdit={true}
+                />
 
-            {/* Edit Form Modal */}
-            <NotulenForm
-                visible={isEditModalVisible}
-                onCancel={() => {
-                    setIsEditModalVisible(false);
-                    setCurrentRecord(null);
-                }}
-                onSubmit={handleUpdate}
-                submitting={submitting}
-                initialValues={currentRecord}
-                isEdit={true}
-            />
-
-            {/* Detail Modal */}
-            <NotulenDetailModal
-                visible={isDetailModalVisible}
-                onCancel={() => {
-                    setIsDetailModalVisible(false);
-                    setCurrentRecord(null);
-                }}
-                record={currentRecord}
-            />
-        </Content>
+                <NotulenDetailModal
+                    visible={isDetailModalVisible}
+                    onCancel={() => setIsDetailModalVisible(false)}
+                    record={currentRecord}
+                />
+            </Content>
+        </Layout>
     );
-};
-
-export default Notulen;
+}
