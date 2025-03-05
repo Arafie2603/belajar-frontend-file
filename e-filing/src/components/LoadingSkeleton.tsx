@@ -72,6 +72,7 @@ const LoadingSkeleton: React.FC = () => {
                 description: 'Kelola semua faktur pembayaran Anda di sini',
                 rowCount: 5
             },
+
             notulen: {
                 path: 'notulen',
                 icon: <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />,
@@ -95,11 +96,20 @@ const LoadingSkeleton: React.FC = () => {
     }, [location]);
 
     return (
+        // <Title level={4} style={{ margin: 0 }}>
+        //                 <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+        //                 Notulen
+        //                 <Badge
+        //                     count={notulenData.length}
+        //                     showZero
+        //                     style={{ backgroundColor: '#1890ff', fontSize: '14px', left: '5px' }}
+        //                 />
+        //             </Title>
         <Content style={{ margin: '16px' }}>
             <Card className="shadow-sm">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                     <div>
-                        <Title level={2} style={{ margin: 0 }}>
+                        <Title level={4} style={{ margin: 0 }}>
                             {config.icon}
                             {config.title}
                             <Skeleton.Button active size="small" style={{

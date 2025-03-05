@@ -35,10 +35,13 @@ import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { eventBus, DATA_EVENTS } from '../utils/eventBus';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import { CACHE_KEYS, invalidateSpecificCache } from '../hooks/useDashboardData';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
 const { Dragger } = Upload;
+
+
 
 interface DataType {
   id: string;
@@ -378,7 +381,13 @@ const SuratKeluar: React.FC = () => {
         try {
           await deleteSurat(id);
           message.success('Surat berhasil dihapus!');
-          // No need to call refreshData here, it will be triggered by the event
+          invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+
+          invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+          invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+          eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+          eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
         } catch (err) {
           const error = err as Error;
           console.error('Error deleting surat:', error);
@@ -399,10 +408,14 @@ const SuratKeluar: React.FC = () => {
       });
 
       message.success('Surat keluar berhasil ditambahkan!');
+      
       setIsModalVisible(false);
+      invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
 
-      // Emit events to notify other components - this will trigger refreshData via the subscription
-      eventBus.emit(DATA_EVENTS.SURAT_KELUAR_UPDATED);
+      invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+      invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+      eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
       eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
     } catch (err) {
       const error = err as any;
@@ -422,6 +435,13 @@ const SuratKeluar: React.FC = () => {
     try {
       await updateSurat(currentRecord.id, formData);
       message.success('Surat keluar berhasil diperbarui!');
+      invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+
+      invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+      invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+      eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+      eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
       setIsEditModalVisible(false);
       // No need to call refreshData here, it will be triggered by the event
     } catch (err) {

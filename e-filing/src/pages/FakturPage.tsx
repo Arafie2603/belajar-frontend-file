@@ -45,6 +45,7 @@ import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+import { CACHE_KEYS, invalidateSpecificCache } from '../hooks/useDashboardData';
 
 dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
@@ -104,6 +105,7 @@ const FakturForm: React.FC<FormProps> = ({
 
     // Reset form when modal visibility changes or initialValues change
     useEffect(() => {
+
         if (visible) {
             form.resetFields();
 
@@ -407,19 +409,20 @@ const Faktur: React.FC = () => {
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [filters, setFilters] = useState<Record<string, any>>({});
     const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://api-efiling.vercel.app/';
+    const [currentPage, setCurrentPage] = useState(1);
     const navigate = useNavigate();
 
     const {
         data,
         loading,
         error,
+        fetchData,
         fetchFakturById,
         updateFaktur,
         deleteFaktur,
         refreshData
     } = useFakturCache(BASE_URL);
 
-    // Create a memoized callback for refreshData to avoid recreating it on every render
     const refreshDataCallback = useCallback(() => {
         refreshData();
     }, [refreshData]);
@@ -431,12 +434,10 @@ const Faktur: React.FC = () => {
     }, [isAuthenticated]);
 
     useEffect(() => {
-        // Use the return value from eventBus.on() as the unsubscribe function
         const unsubscribeFaktur = eventBus.on(DATA_EVENTS.FAKTUR_UPDATED, refreshDataCallback);
         const unsubscribeAnyData = eventBus.on(DATA_EVENTS.ANY_DATA_UPDATED, refreshDataCallback);
 
         return () => {
-            // Call the unsubscribe functions
             unsubscribeFaktur();
             unsubscribeAnyData();
         };
@@ -500,6 +501,13 @@ const Faktur: React.FC = () => {
             }
 
             message.success(`${selectedRowKeys.length} faktur berhasil dihapus!`);
+            invalidateSpecificCache(CACHE_KEYS.FAKTUR);
+
+            invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+            invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+            eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
+            eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
             setSelectedRowKeys([]);
             setSelectedItems([]);
             setIsDeleteModalVisible(false);
@@ -523,9 +531,15 @@ const Faktur: React.FC = () => {
             });
 
             message.success('Faktur berhasil ditambahkan!');
+            invalidateSpecificCache(CACHE_KEYS.NOTULEN);
+
+            invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+            invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+            eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
+            eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
             setIsModalVisible(false);
 
-            // Emit events to notify other components - this will trigger refreshData via the subscription
             eventBus.emit(DATA_EVENTS.FAKTUR_UPDATED);
             eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
         } catch (err) {
@@ -546,8 +560,14 @@ const Faktur: React.FC = () => {
         try {
             await updateFaktur(currentRecord.id, formData);
             message.success('Faktur berhasil diperbarui!');
+            invalidateSpecificCache(CACHE_KEYS.NOTULEN);
+
+            invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+            invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+            eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
+            eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
             setIsEditModalVisible(false);
-            // No need to call refreshData here, it will be triggered by the event
         } catch (err) {
             const error = err as Error;
             message.error(
@@ -558,7 +578,6 @@ const Faktur: React.FC = () => {
         }
     };
 
-    // Helper function for type checking
     const isSearchableValue = (value: unknown): value is string => {
         return typeof value === 'string' || typeof value === 'number';
     };
@@ -577,7 +596,6 @@ const Faktur: React.FC = () => {
         setFilters(newFilters);
     };
 
-    // Debugging log
     console.log("Faktur Data Sebelum Filter:", fakturData);
     console.log("Filters:", filters);
     console.log("Search Text:", searchText);
@@ -653,6 +671,7 @@ const Faktur: React.FC = () => {
             </div>
         );
     }
+    console.log(data);
 
     const columns = [
         {
@@ -701,7 +720,8 @@ const Faktur: React.FC = () => {
             dataIndex: 'tanggal',
             key: 'tanggal',
             width: '15%',
-            render: (text: string) => dayjs(text).format('DD MMM YYYY HH:mm'),
+            render: (date: string) => dayjs(date).format('DD/MM/YYYY'),
+
             filterDropdown: ({ confirm: confirmFilter }: any) => (
                 <div style={{ padding: 8 }}>
                     <DatePicker.RangePicker
@@ -1002,7 +1022,7 @@ const Faktur: React.FC = () => {
                         <DollarOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
                         Faktur
                         <Badge
-                            count={fakturData.length}
+                            count={data.meta?.totalItems || fakturData.length}
                             showZero
                             style={{ backgroundColor: '#1890ff', fontSize: '14px', left: '5px' }}
                         />
@@ -1066,7 +1086,16 @@ const Faktur: React.FC = () => {
                         columns={columns}
                         dataSource={filteredData || []}
                         rowKey="id"
-                        pagination={{ pageSize: 10 }}
+                        pagination={{
+                            current: data.meta?.currentPage || currentPage,
+                            pageSize: data.meta?.itemsPerPage || 10,
+                            total: data.meta?.totalItems || 0,
+
+                            onChange: (page) => {
+                                setCurrentPage(page);
+                                fetchData(page);
+                            }
+                        }}
                         locale={{
                             emptyText: Object.keys(filters).length > 0 || searchText
                                 ? "Tidak ada data yang sesuai dengan filter"
@@ -1079,8 +1108,22 @@ const Faktur: React.FC = () => {
                         columns={columns}
                         dataSource={filteredData || []}
                         rowKey="id"
-                        pagination={{ pageSize: 10 }}
-                        locale={{ emptyText: "Tidak ada data yang sesuai dengan filter" }}
+                        pagination={{
+                            current: data.meta?.currentPage || currentPage,
+                            pageSize: data.meta?.itemsPerPage || 10,
+                            total: data.meta?.totalItems || 0,
+
+                            onChange: (page) => {
+                                setCurrentPage(page);
+                                fetchData(page);
+                            }
+                        }}
+                        locale={{
+                            emptyText: Object.keys(filters).length > 0 || searchText
+                                ? "Tidak ada data yang sesuai dengan filter"
+                                : "Belum ada data faktur"
+                        }}
+                        rowSelection={rowSelection}
                     />
                 )}
             </Card>

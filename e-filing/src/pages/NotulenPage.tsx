@@ -33,7 +33,8 @@ import {
     UserOutlined,
     ReloadOutlined,
     ExclamationCircleOutlined,
-    FilterOutlined
+    FilterOutlined,
+    CloseOutlined
 } from '@ant-design/icons';
 import { UploadProps } from 'antd';
 import { useNotulenCache } from '../hooks/useNotulenCache';
@@ -43,6 +44,8 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { ColumnType } from 'antd/es/table';
+import { CACHE_KEYS, invalidateSpecificCache } from '../hooks/useDashboardData';
+
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -50,7 +53,6 @@ const { Dragger } = Upload;
 const { TextArea } = Input;
 const { Option } = Select;
 
-// Add the missing UserType interface
 interface UserType {
     id: string;
     name: string;
@@ -58,10 +60,18 @@ interface UserType {
     role?: string;
 }
 
+interface EnhancedDeleteConfirmationModalProps {
+    visible: boolean;
+    onCancel: () => void;
+    onConfirm: () => void;
+    selectedItems: any[];
+    loading: boolean;
+}
+
 interface User {
     id: string;
     name: string;
-    email?: string; // Tidak ada di response, buat opsional
+    email?: string;
     role: string;
     fakultas: string;
     prodi: string;
@@ -77,18 +87,11 @@ interface Participant {
     name: string;
     type: 'registered' | 'custom';
 }
-// type FilterState = Partial<{
-//     status: string;
-//     date: Dayjs | null;
-//     judul: string;
-//     lokasi: string;
-//     tanggal_rapat: string;
-//     pemimpin_rapat: string;
-// }>;
+
 interface NotulenType {
     id: string;
     judul: string;
-    tanggal: string;
+    tanggal_rapat: string;
     lokasi: string;
     pemimpin_rapat: string;
     peserta: string;
@@ -287,11 +290,10 @@ export const NotulenForm: React.FC<FormProps> = ({
     const handleSubmit = (values: any) => {
         const formData = new FormData();
 
-        // Format the date before adding to FormData
         const formattedValues = {
             ...values,
-            tanggal: values.tanggal ? values.tanggal.format('YYYY-MM-DD') : ''
-        };
+            tanggal_rapat: values.tanggal_rapat ? values.tanggal_rapat.format('YYYY-MM-DDTHH:mm:ss.SSSZ') : ''
+        }
 
         // Create a structured participant list
         const participantsList = [
@@ -563,95 +565,93 @@ export const NotulenForm: React.FC<FormProps> = ({
     );
 };
 
-const DeleteConfirmationModal: React.FC<{
-    visible: boolean;
-    onCancel: () => void;
-    onConfirm: () => void;
-    selectedItems: NotulenType[];
-    loading: boolean;
-}> = ({ visible, onCancel, onConfirm, selectedItems, loading }) => (
-    <Modal
-        title="Konfirmasi Penghapusan"
-        visible={visible}
-        onCancel={onCancel}
-        footer={[
-            <Button key="back" onClick={onCancel}>
-                Batal
-            </Button>,
-            <Button
-                key="submit"
-                type="primary"
-                danger
-                loading={loading}
-                onClick={onConfirm}
-            >
-                Hapus
-            </Button>
-        ]}
-    >
-        <p>Apakah Anda yakin ingin menghapus {selectedItems.length} notulen?</p>
-    </Modal>
-);
 
-const EnhancedDeleteConfirmationModal: React.FC<{
-    visible: boolean;
-    onCancel: () => void;
-    onConfirm: () => void;
-    selectedItems: NotulenType[];
-    loading: boolean;
-}> = ({ visible, onCancel, onConfirm, selectedItems, loading }) => (
-    <Modal
-        title={
-            <div style={{ display: 'flex', alignItems: 'center', color: '#ff4d4f' }}>
-                <ExclamationCircleOutlined style={{ fontSize: '24px', marginRight: '10px' }} />
-                Konfirmasi Penghapusan
-            </div>
-        }
-        visible={visible}
-        onCancel={onCancel}
-        footer={[
-            <Button key="back" onClick={onCancel}>
-                Batalkan
-            </Button>,
-            <Button
-                key="submit"
-                type="primary"
-                danger
-                loading={loading}
-                onClick={onConfirm}
-                icon={<DeleteOutlined />}
-            >
-                Hapus ({selectedItems.length})
-            </Button>
-        ]}
-        width={500}
-    >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            <Alert
-                message="Perhatian"
-                description={`Anda akan menghapus ${selectedItems.length} notulen. Tindakan ini tidak dapat dibatalkan.`}
-                type="warning"
-                showIcon
-            />
 
-            <div>
-                <Text strong>Detail Notulen yang Akan Dihapus:</Text>
-                <ul style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                    {selectedItems.map((item, index) => (
-                        <li key={item.id}>
-                            <Text type="secondary">
-                                {index + 1}. {item.judul}
-                                <Text type="secondary" style={{ marginLeft: '10px' }}>
-                                    ({dayjs(item.tanggal).format('DD/MM/YYYY')})
+const EnhancedDeleteConfirmationModal: React.FC<EnhancedDeleteConfirmationModalProps> = ({
+    visible,
+    onCancel,
+    onConfirm,
+    selectedItems,
+    loading
+}) => {
+    return (
+        <Modal
+            title={null}
+            open={visible}
+            onCancel={onCancel}
+            closeIcon={<CloseOutlined />}
+            footer={null}
+            centered
+            width={500}
+            maskStyle={{
+                backgroundColor: 'rgba(0, 0, 0, 0.45)'
+            }}
+            bodyStyle={{
+                padding: '24px',
+                borderRadius: '12px',
+                textAlign: 'center'
+            }}
+        >
+            <div className="flex flex-col items-center">
+                <ExclamationCircleOutlined
+                    style={{
+                        fontSize: '64px',
+                        color: '#ff4d4f',
+                        marginBottom: '16px'
+                    }}
+                />
+
+                <h2 className="text-xl font-bold mb-4 text-gray-800">
+                    Konfirmasi Penghapusan
+                </h2>
+
+                <Alert
+                    message="Tindakan Permanen"
+                    description={`Anda akan menghapus ${selectedItems.length} notulen. Tindakan ini tidak dapat dibatalkan.`}
+                    type="warning"
+                    showIcon
+                    className="mb-4 w-full"
+                />
+
+                <div className="w-full max-h-[200px] overflow-y-auto mb-4">
+                    <Text strong>Detail Notulen yang Akan Dihapus:</Text>
+                    <ul className="mt-2 space-y-1">
+                        {selectedItems.map((item, index) => (
+                            <li key={item.id} className="text-gray-600">
+                                <Text type="secondary">
+                                    {index + 1}. {item.judul}
+                                    <Text type="secondary" className="ml-2">
+                                        ({new Date(item.tanggal_rapat).toLocaleDateString()})
+                                    </Text>
                                 </Text>
-                            </Text>
-                        </li>
-                    ))}
-                </ul>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                <div className="flex justify-center space-x-4 w-full">
+                    <Button
+                        onClick={onCancel}
+                        className="flex-1"
+                    >
+                        Batalkan
+                    </Button>
+
+                    <Button
+                        type="primary"
+                        danger
+                        onClick={onConfirm}
+                        loading={loading}
+                        icon={<DeleteOutlined />}
+                        className="flex-1"
+                    >
+                        Hapus ({selectedItems.length})
+                    </Button>
+                </div>
             </div>
-        </div>
-    </Modal>
-);
+        </Modal>
+    );
+};
 
 export default function NotulenPage() {
     const { isAuthenticated, token } = useAuth();
@@ -724,7 +724,7 @@ export default function NotulenPage() {
 
         if (filters.date) {
             result = result.filter(item =>
-                dayjs(item.tanggal).isSame(filters.date, 'day')
+                dayjs(item.tanggal_rapat).isSame(filters.date, 'day')
             );
         }
 
@@ -751,12 +751,37 @@ export default function NotulenPage() {
     const handleMultipleDelete = async () => {
         setDeleteLoading(true);
         try {
-            // Parallel deletion
-            await Promise.all(selectedItems.map(item => deleteNotulen(item.id)));
+            const deleteResults = await Promise.allSettled(
+                selectedItems.map(item => deleteNotulen(item.id))
+            );
 
-            message.success(`${selectedItems.length} notulen berhasil dihapus!`);
+            const successCount = deleteResults.filter(
+                result => result.status === 'fulfilled'
+            ).length;
+            const failedCount = deleteResults.filter(
+                result => result.status === 'rejected'
+            ).length;
+
+            if (successCount > 0) {
+                message.success(`Berhasil menghapus ${successCount} notulen`);
+                invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+
+                invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+                invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+                eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+                eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
+            }
+
+            if (failedCount > 0) {
+                message.error(`Gagal menghapus ${failedCount} notulen`);
+            }
+
             setSelectedRowKeys([]);
             setIsDeleteModalVisible(false);
+
+            eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
+            eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
         } catch (err) {
             const error = err as Error;
             message.error(`Gagal menghapus notulen: ${error.message || 'Unknown error'}`);
@@ -820,11 +845,15 @@ export default function NotulenPage() {
             });
 
             message.success('Notulen berhasil ditambahkan!');
-            setIsModalVisible(false);
+            invalidateSpecificCache(CACHE_KEYS.NOTULEN);
 
-            // Emit events to notify other components - this will trigger refreshData via the subscription
+            invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+            invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
             eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
             eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
+            setIsModalVisible(false);
+
         } catch (err) {
             const error = err as any;
             message.error(
@@ -844,7 +873,14 @@ export default function NotulenPage() {
             await updateNotulen(currentRecord.id, formData);
             message.success('Notulen berhasil diperbarui!');
             setIsEditModalVisible(false);
-            // No need to call refreshData here, it will be triggered by the event
+
+            invalidateSpecificCache(CACHE_KEYS.NOTULEN);
+
+            invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+            invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+            eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
+            eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
         } catch (err) {
             const error = err as Error;
             message.error(
@@ -873,32 +909,33 @@ export default function NotulenPage() {
         </div>
     );
     const columns: ColumnType<NotulenType>[] = [
-        // Perbaikan pada kolom Judul
         {
             title: 'Judul',
             dataIndex: 'judul',
             key: 'judul',
-            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm }) => (
-                <div className="p-2">
+            width: '15%',
+            ellipsis: true,
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm }: any) => (
+                <div style={{ padding: 8 }}>
                     <Input
-                        placeholder="Cari judul"
-                        value={selectedKeys[0]}
-                        onChange={(e) =>
-                            setSelectedKeys(e.target.value ? [e.target.value] : []) // Pastikan selalu array
-                        }
+                        placeholder="Cari judul..."
+                        value={selectedKeys[0] || ""}
+                        onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
                         onPressEnter={() => confirm()}
-                        className="mb-2 block"
+                        className="mb-3"
+                        allowClear
                     />
                     <Space>
                         <Button
+                            type="primary"
                             onClick={() => {
-                                // Konversi `selectedKeys` ke string[] sebelum dikirim
                                 handleFilterChange("judul", selectedKeys.map(String), confirm);
                             }}
-                            type="primary"
+                            icon={<SearchOutlined />}
                             size="small"
+                            style={{ width: 90 }}
                         >
-                            Cari
+                            Filter
                         </Button>
                         <Button
                             onClick={() => {
@@ -910,24 +947,23 @@ export default function NotulenPage() {
                             Reset
                         </Button>
                     </Space>
-                </div>
+                </div >
             ),
             onFilter: (value, record) =>
                 record.judul.toLowerCase().includes(value.toString().toLowerCase()),
-            // Pastikan filteredValue selalu array
             filteredValue: tableFilters['judul']?.length > 0 ? tableFilters['judul'] : null
         },
         {
             title: 'Tanggal Rapat',
-            dataIndex: 'tanggal',
-            key: 'tanggal',
+            dataIndex: 'tanggal_rapat',
+            key: 'tanggal_rapat',
             align: 'center',
             render: (date: string) => dayjs(date).format('DD/MM/YYYY'),
             filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
                 <div style={{ padding: 8 }}>
                     <DatePicker
                         value={selectedKeys[0] ? dayjs(selectedKeys[0] as string) : null}
-                        onChange={(date) => setSelectedKeys(date ? [date.format('YYYY-MM-DD')] : [])}
+                        onChange={(date) => setSelectedKeys(date ? [date.format('DD/MM/YYYY')] : [])}
                         style={{ marginBottom: 8, display: 'block' }}
                         placeholder="Pilih tanggal"
                     />
@@ -954,11 +990,10 @@ export default function NotulenPage() {
             filterIcon: (filtered) => (
                 <FilterOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
             ),
-            onFilter: (value, record) => dayjs(record.tanggal).format('YYYY-MM-DD') === value,
+            onFilter: (value, record) => dayjs(record.tanggal_rapat).format('DD/MM/YYYY') === value,
 
-            // ✅ Tambahkan Sorting ASC & DESC
-            sorter: (a, b) => dayjs(a.tanggal).unix() - dayjs(b.tanggal).unix(),
-            sortDirections: ['ascend', 'descend'], // Menentukan arah sorting
+            sorter: (a, b) => dayjs(a.tanggal_rapat).unix() - dayjs(b.tanggal_rapat).unix(),
+            sortDirections: ['ascend', 'descend'],
         },
         {
             title: 'Lokasi',
@@ -1042,28 +1077,6 @@ export default function NotulenPage() {
             onFilter: (value, record) =>
                 record.pemimpin_rapat.toLowerCase().includes(value.toString().toLowerCase()),
         },
-        // {
-        //     title: 'Status',
-        //     dataIndex: 'status',
-        //     key: 'status',
-        //     align: 'center',
-        //     render: (status: string) => {
-        //         const statusColors: Record<string, string> = {
-        //             'draft': 'warning',
-        //             'published': 'success',
-        //             'archived': 'default'
-        //         };
-        //         return <Tag color={statusColors[status?.toLowerCase()] || 'processing'}>
-        //             {status || 'Unknown'}
-        //         </Tag>;
-        //     },
-        //     filters: [
-        //         { text: 'Draft', value: 'draft' },
-        //         { text: 'Published', value: 'published' },
-        //         { text: 'Archived', value: 'archived' }
-        //     ],
-        //     onFilter: (value, record) => record.status === value,
-        // },
         {
             title: 'Status',
             dataIndex: 'status',
@@ -1150,6 +1163,13 @@ export default function NotulenPage() {
     ];
 
     const handleDeleteSingle = (record: NotulenType) => {
+        invalidateSpecificCache(CACHE_KEYS.NOTULEN);
+
+        invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+        invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+        eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
+        eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
         setSelectedRowKeys([record.id]);
         setIsDeleteModalVisible(true);
     };
@@ -1265,14 +1285,6 @@ export default function NotulenPage() {
                     submitting={submitting}
                     initialValues={currentRecord}
                     isEdit={true}
-                />
-
-                <DeleteConfirmationModal
-                    visible={isDeleteModalVisible}
-                    onCancel={() => setIsDeleteModalVisible(false)}
-                    onConfirm={handleMultipleDelete}
-                    selectedItems={selectedItems}
-                    loading={deleteLoading}
                 />
             </Content>
         </Layout>

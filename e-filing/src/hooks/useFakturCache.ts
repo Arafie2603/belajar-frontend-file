@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { storage } from '../utils/storage';
 import { eventBus, DATA_EVENTS } from '../utils/eventBus';
@@ -11,40 +11,28 @@ interface FakturType {
     deskripsi: string;
 }
 
-interface FakturResponse {
-    data: {
-        paginatedData: FakturType[];
-        meta: {
-            currentPage: number;
-            offset: number;
-            itemsPerPage: number;
-            unpaged: boolean;
-            totalPages: number;
-            totalItems: number;
-            sortBy: any[];
-            filter: Record<string, any>;
-        };
-    };
-    status: number;
-    message: string;
-}
-
 const CACHE_KEY = 'faktur_cache';
-const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes in milliseconds
+const CACHE_EXPIRY = 5 * 60 * 1000; // 5 menit dalam milidetik
 
 export const useFakturCache = (baseUrl: string) => {
-    const [data, setData] = useState<any>({ paginatedData: [] });
+    const [data, setData] = useState<any>({
+        paginatedData: [],
+        meta: {
+            currentPage: 1,
+            itemsPerPage: 10,
+            totalPages: 1,
+            totalItems: 0
+        }
+    });
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const { token } = useAuth();
 
-    const getHeaders = useCallback(() => {
-        return {
-            Authorization: `Bearer ${token}`,
-        };
-    }, [token]);
-
-    const fetchData = useCallback(async (force = false) => {
+    // Perbaikan: getHeaders adalah objek, bukan fungsi
+    const getHeaders = useMemo(() => ({
+        Authorization: `Bearer ${token}`,
+    }), [token]);
+    const fetchData = useCallback(async (page = 1, force = false) => {
         if (!token) {
             setLoading(false);
             setError('Authentication token not found');
@@ -55,9 +43,11 @@ export const useFakturCache = (baseUrl: string) => {
         setError(null);
 
         try {
-            // Check the cache first if not forced refresh
+            // Create a unique cache key that includes the page number
+            const CACHE_KEY_WITH_PAGE = `${CACHE_KEY}_page_${page}`;
+
             if (!force) {
-                const cachedData = storage.get(CACHE_KEY);
+                const cachedData = storage.get(CACHE_KEY_WITH_PAGE);
                 if (cachedData && cachedData.timestamp && Date.now() - cachedData.timestamp < CACHE_EXPIRY) {
                     setData(cachedData.data);
                     setLoading(false);
@@ -65,14 +55,20 @@ export const useFakturCache = (baseUrl: string) => {
                 }
             }
 
-            // Cache miss or forced refresh, fetch from API
-            const response = await axios.get<FakturResponse>(`${baseUrl}api/faktur`, {
-                headers: getHeaders(),
+            const response = await axios.get(`${baseUrl}api/faktur`, {
+                params: {
+                    page,
+                    limit: data.meta.itemsPerPage || 10
+                },
+                headers: {
+                    ...getHeaders,
+                    Authorization: `Bearer ${token}`
+                },
             });
 
             if (response.data && response.data.data) {
-                // Save to cache with timestamp
-                storage.set(CACHE_KEY, {
+                // Store page-specific cached data
+                storage.set(CACHE_KEY_WITH_PAGE, {
                     data: response.data.data,
                     timestamp: Date.now(),
                 });
@@ -88,15 +84,14 @@ export const useFakturCache = (baseUrl: string) => {
         } finally {
             setLoading(false);
         }
-    }, [baseUrl, token, getHeaders]);
+    }, [token, getHeaders, baseUrl, data.meta.itemsPerPage]);
 
     const refreshData = useCallback(() => {
-        return fetchData(true);
+        return fetchData(1, true);
     }, [fetchData]);
 
     const fetchFakturById = useCallback(async (id: string) => {
         try {
-            // Try to find in cache first
             const cachedData = storage.get(CACHE_KEY);
             if (cachedData && cachedData.data && cachedData.data.paginatedData) {
                 const cachedFaktur = cachedData.data.paginatedData.find((item: FakturType) => item.id === id);
@@ -105,9 +100,8 @@ export const useFakturCache = (baseUrl: string) => {
                 }
             }
 
-            // Not found in cache, fetch from API
             const response = await axios.get<any>(`${baseUrl}api/faktur/${id}`, {
-                headers: getHeaders(),
+                headers: getHeaders, // Perbaikan: Tidak lagi memanggil sebagai fungsi
             });
 
             if (response.data && response.data.data) {
@@ -126,12 +120,11 @@ export const useFakturCache = (baseUrl: string) => {
         try {
             await axios.put(`${baseUrl}api/faktur/${id}`, formData, {
                 headers: {
-                    ...getHeaders(),
+                    ...getHeaders, // Perbaikan: Tidak memanggil sebagai fungsi
                     'Content-Type': 'multipart/form-data',
                 },
             });
 
-            // Invalidate cache and emit events
             storage.remove(CACHE_KEY);
             eventBus.emit(DATA_EVENTS.FAKTUR_UPDATED);
             eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
@@ -147,10 +140,9 @@ export const useFakturCache = (baseUrl: string) => {
     const deleteFaktur = useCallback(async (id: string) => {
         try {
             await axios.delete(`${baseUrl}api/faktur/${id}`, {
-                headers: getHeaders(),
+                headers: getHeaders, // Perbaikan: Tidak memanggil sebagai fungsi
             });
 
-            // Invalidate cache and emit events
             storage.remove(CACHE_KEY);
             eventBus.emit(DATA_EVENTS.FAKTUR_UPDATED);
             eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
@@ -163,12 +155,10 @@ export const useFakturCache = (baseUrl: string) => {
         }
     }, [baseUrl, getHeaders, refreshData]);
 
-    // Initial data load
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
-    // Subscribe to events that should trigger a refresh
     useEffect(() => {
         const unsubscribeFaktur = eventBus.on(DATA_EVENTS.FAKTUR_UPDATED, refreshData);
         const unsubscribeAnyData = eventBus.on(DATA_EVENTS.ANY_DATA_UPDATED, refreshData);
@@ -184,6 +174,7 @@ export const useFakturCache = (baseUrl: string) => {
         loading,
         error,
         refreshData,
+        fetchData,
         fetchFakturById,
         updateFaktur,
         deleteFaktur,

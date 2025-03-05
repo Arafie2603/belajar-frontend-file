@@ -1,11 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from './useAuth';
 
 interface NotulenType {
     id: string;
     judul: string;
-    tanggal: string;
+    tanggal_rapat: string;
     lokasi: string;
     pemimpin_rapat: string;
     peserta: string;
@@ -42,6 +42,8 @@ export const useNotulenCache = (baseURL: string) => {
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
+    const isFetchedRef = useRef(false);
+
     const fetchData = useCallback(async () => {
         if (!token) return;
 
@@ -49,6 +51,20 @@ export const useNotulenCache = (baseURL: string) => {
         setError(null);
 
         try {
+            // Check localStorage first
+            const cachedData = localStorage.getItem('notulenData');
+            const cachedTimestamp = localStorage.getItem('notulenDataTimestamp');
+
+            // Check if cached data exists and is less than 5 minutes old
+            if (cachedData && cachedTimestamp) {
+                const timeDiff = Date.now() - parseInt(cachedTimestamp);
+                if (timeDiff < 5 * 60 * 1000) { // 5 minutes
+                    setData(JSON.parse(cachedData));
+                    setLoading(false);
+                    return;
+                }
+            }
+
             const response = await axios.get<NotulenResponse>(`${baseURL}api/notulen`, {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -56,39 +72,35 @@ export const useNotulenCache = (baseURL: string) => {
             });
 
             if (response.data && response.data.data) {
+                // Store in localStorage
+                localStorage.setItem('notulenData', JSON.stringify(response.data.data));
+                localStorage.setItem('notulenDataTimestamp', Date.now().toString());
+
                 setData(response.data.data);
             } else {
                 throw new Error('Data format is incorrect');
             }
-        } catch (error: unknown) {
-            if (axios.isAxiosError(error)) {
-                setError(error.response?.data?.message || 'Failed to fetch data');
-            } else if (error instanceof Error) {
-                setError(error.message);
-            } else {
-                setError('An unknown error occurred');
-            }
-        }
-        finally {
+        } catch (error) {
+            setError(error instanceof Error ? error.message : "Terjadi kesalahan");
+        } finally {
             setLoading(false);
         }
     }, [baseURL, token]);
 
-    // Initial data fetch
     useEffect(() => {
-        if (token) {
+        if (token && !isFetchedRef.current) {
             fetchData();
         }
     }, [fetchData, token]);
 
-    // Fetch a specific notulen by ID
     const fetchNotulenById = useCallback(async (id: string) => {
         if (!token) return null;
 
         try {
             const response = await axios.get(`${baseURL}api/notulen/${id}`, {
                 headers: {
-                    Authorization: `Bearer ${token}`
+                    Authorization: `Bearer ${token}`,
+
                 }
             });
 
@@ -102,7 +114,6 @@ export const useNotulenCache = (baseURL: string) => {
         }
     }, [baseURL, token]);
 
-    // Update a notulen
     const updateNotulen = useCallback(async (id: string, formData: FormData) => {
         if (!token) return null;
 
@@ -114,7 +125,8 @@ export const useNotulenCache = (baseURL: string) => {
                 }
             });
 
-            // Refresh data after update
+            isFetchedRef.current = false;
+
             fetchData();
             return response.data;
         } catch (error) {
@@ -123,7 +135,6 @@ export const useNotulenCache = (baseURL: string) => {
         }
     }, [baseURL, token, fetchData]);
 
-    // Delete a notulen
     const deleteNotulen = useCallback(async (id: string) => {
         if (!token) return null;
 
@@ -134,7 +145,8 @@ export const useNotulenCache = (baseURL: string) => {
                 }
             });
 
-            // Refresh data after deletion
+            isFetchedRef.current = false;
+
             fetchData();
             return response.data;
         } catch (error) {
@@ -150,6 +162,9 @@ export const useNotulenCache = (baseURL: string) => {
         fetchNotulenById,
         updateNotulen,
         deleteNotulen,
-        refreshData: fetchData
+        refreshData: useCallback(() => {
+            isFetchedRef.current = false;
+            fetchData();
+        }, [fetchData]),
     };
 };
