@@ -15,7 +15,13 @@ import {
     Tooltip,
     Upload,
     Alert,
-    Image
+    Select,
+    InputNumber,
+    DatePicker,
+    Tag,
+    Result,
+    Flex,
+    Badge,
 } from 'antd';
 import {
     PlusOutlined,
@@ -23,27 +29,58 @@ import {
     DeleteOutlined,
     EyeOutlined,
     InboxOutlined,
-    FileTextOutlined,
     SearchOutlined,
-    DollarOutlined
+    DollarOutlined,
+    CalendarOutlined,
+    ExclamationCircleOutlined,
+    FilterOutlined,
+    ReloadOutlined,
 } from '@ant-design/icons';
 import { UploadProps } from 'antd';
 import { useFakturCache } from '../hooks/useFakturCache';
 import { useAuth } from '../hooks/useAuth';
 import { eventBus, DATA_EVENTS } from '../utils/eventBus';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import { useNavigate } from 'react-router-dom';
+import dayjs from 'dayjs';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
+
 
 const { Content } = Layout;
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 const { Dragger } = Upload;
 const { TextArea } = Input;
+const { Option } = Select;
+const { confirm } = Modal;
+
+interface User {
+    id: string;
+    nama: string;
+    jabatan: string;
+    nomor_identitas: string;
+}
 
 interface FakturType {
     id: string;
     bukti_pembayaran: string;
     deskripsi: string;
+    jumlah_pengeluaran: number;
+    metode_pembayaran: string;
+    status_pembayaran: string;
+    user?: User;
+    tanggal: string;
+    created_by: string;
+    updated_by: string;
 }
 
+const formatToIDR = (value: number | undefined): string => {
+    if (value === undefined) return '';
+    return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
 
 interface FormProps {
     visible: boolean;
@@ -126,7 +163,16 @@ const FakturForm: React.FC<FormProps> = ({
         // Add all form values to FormData
         Object.entries(values).forEach(([key, value]: [string, any]) => {
             if (value !== undefined && value !== null) {
-                formData.append(key, value);
+                // Handle jumlah_pengeluaran specially to ensure it's sent as a number
+                if (key === 'jumlah_pengeluaran') {
+                    formData.append(key, value.toString());
+                } else if (key === 'tanggal') {
+                    const date = dayjs(values.tanggal);
+                    value.tanggal = date.format('DD/MM/YYYY');
+                    formData.append(key, value.tanggal);
+                } else {
+                    formData.append(key, value);
+                }
             }
         });
 
@@ -180,15 +226,75 @@ const FakturForm: React.FC<FormProps> = ({
                 <Form.Item
                     name="deskripsi"
                     label="Deskripsi"
-                    rules={[{ required: true, message: 'Mohon isi deskripsi faktur!' }]}
+                    rules={[
+                        { required: true, message: 'Mohon isi deskripsi faktur!' },
+                        { min: 3, message: 'Deskripsi harus memiliki minimal 3 karakter!' }
+                    ]}
                 >
                     <TextArea rows={4} placeholder="Masukkan deskripsi faktur" />
                 </Form.Item>
 
                 <Form.Item
+                    name="tanggal"
+                    label="Tanggal"
+                    rules={[{ required: true, message: 'Mohon pilih tanggal!' }]}
+                >
+                    <DatePicker
+                        style={{ width: '100%' }}
+                        format="YYYY-MM-DD"
+                        placeholder="Pilih tanggal"
+                    />
+                </Form.Item>
+
+
+                <Form.Item
+                    name="jumlah_pengeluaran"
+                    label="Jumlah Pengeluaran (Rp)"
+                    rules={[{ required: true, message: 'Mohon isi jumlah pengeluaran!' }]}
+                >
+                    <InputNumber<number>
+                        style={{ width: '100%' }}
+                        placeholder="Masukkan jumlah pengeluaran"
+                        formatter={(value) =>
+                            value ? `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : ''
+                        }
+                        parser={(value) =>
+                            value ? Number(value.replace(/Rp\s?|(\.)/g, '')) || 0 : 0
+                        }
+                        min={0}
+                    />
+                </Form.Item>
+
+                <Form.Item
+                    name="metode_pembayaran"
+                    label="Metode Pembayaran"
+                    rules={[{ required: true, message: 'Mohon pilih metode pembayaran!' }]}
+                >
+                    <Select placeholder="Pilih metode pembayaran">
+                        <Option value="cash">Cash</Option>
+                        <Option value="transfer">Transfer Bank</Option>
+                        <Option value="qris">QRIS</Option>
+                        <Option value="kartu_kredit">Kartu Kredit</Option>
+                        <Option value="kartu_debit">Kartu Debit</Option>
+                    </Select>
+                </Form.Item>
+
+                <Form.Item
+                    name="status_pembayaran"
+                    label="Status Pembayaran"
+                    rules={[{ required: true, message: 'Mohon pilih status pembayaran!' }]}
+                >
+                    <Select placeholder="Pilih status pembayaran">
+                        <Option value="lunas">Lunas</Option>
+                        <Option value="belum_lunas">Belum Lunas</Option>
+                        <Option value="sebagian">Dibayar Sebagian</Option>
+                        <Option value="dibatalkan">Dibatalkan</Option>
+                    </Select>
+                </Form.Item>
+
+                <Form.Item
                     name="bukti_pembayaran"
                     label="Bukti Pembayaran"
-                    rules={[{ required: !isEdit, message: 'Mohon unggah bukti pembayaran!' }]}
                 >
                     <Dragger {...uploadProps}>
                         <p className="ant-upload-drag-icon">
@@ -209,59 +315,81 @@ const FakturForm: React.FC<FormProps> = ({
     );
 };
 
-const FakturDetailModal: React.FC<{
+
+// Multi-delete confirmation modal
+const DeleteConfirmationModal: React.FC<{
     visible: boolean;
     onCancel: () => void;
-    record: FakturType | null;
-}> = ({ visible, onCancel, record }) => {
-    if (!record) return null;
-
+    onConfirm: () => void;
+    selectedItems: FakturType[];
+    loading: boolean;
+}> = ({ visible, onCancel, onConfirm, selectedItems, loading }) => {
     return (
         <Modal
-            title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <DollarOutlined style={{ color: '#1890ff' }} />
-                    <span>Detail Faktur</span>
-                </div>
-            }
+            title={null}
             open={visible}
+            footer={null}
             onCancel={onCancel}
-            footer={[
-                <Button key="close" onClick={onCancel}>
-                    Tutup
-                </Button>
-            ]}
-            width={700}
+            width={500}
+            className="delete-confirmation-modal"
+            closable={!loading}
+            maskClosable={!loading}
         >
-            <div style={{ marginBottom: '20px' }}>
-                <div style={{ marginBottom: '8px' }}>
-                    <strong>ID:</strong> {record.id}
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                    <strong>Deskripsi:</strong>
-                    <p style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>{record.deskripsi}</p>
-                </div>
-                <div>
-                    <strong>Bukti Pembayaran:</strong>
-                    <div style={{ marginTop: '12px' }}>
-                        {record.bukti_pembayaran && (
-                            record.bukti_pembayaran.toLowerCase().endsWith('.pdf') ? (
-                                <a href={record.bukti_pembayaran} target="_blank" rel="noopener noreferrer">
-                                    <Button type="primary" icon={<FileTextOutlined />}>
-                                        Lihat PDF
-                                    </Button>
-                                </a>
-                            ) : (
-                                <Image
-                                    src={record.bukti_pembayaran}
-                                    alt="Bukti Pembayaran"
-                                    style={{ maxWidth: '100%' }}
-                                />
-                            )
-                        )}
+            <Result
+                status="warning"
+                icon={<ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
+                title="Konfirmasi Penghapusan"
+                subTitle={
+                    <div>
+                        <Paragraph style={{ fontSize: '16px', marginBottom: '24px' }}>
+                            Anda akan menghapus <Text strong>{selectedItems.length}</Text> faktur berikut:
+                        </Paragraph>
+                        <div style={{
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            padding: '12px',
+                            border: '1px solid #f0f0f0',
+                            borderRadius: '4px',
+                            backgroundColor: '#fafafa',
+                            marginBottom: '24px'
+                        }}>
+                            {selectedItems.map((item, index) => (
+                                <div key={item.id} style={{
+                                    padding: '8px 12px',
+                                    marginBottom: '8px',
+                                    backgroundColor: 'white',
+                                    borderRadius: '4px',
+                                    border: '1px solid #f0f0f0'
+                                }}>
+                                    <div><Text strong>{index + 1}. {item.deskripsi.substring(0, 30)}{item.deskripsi.length > 30 ? '...' : ''}</Text></div>
+                                    <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                                        <CalendarOutlined style={{ marginRight: '4px' }} />
+                                        {dayjs(item.tanggal).format('DD MMM YYYY')} |
+                                        <DollarOutlined style={{ margin: '0 4px 0 8px' }} />
+                                        Rp {formatToIDR(item.jumlah_pengeluaran)}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <Alert
+                            message="Peringatan: Tindakan ini tidak dapat dibatalkan"
+                            type="error"
+                            showIcon
+                            style={{ marginBottom: '24px' }}
+                        />
                     </div>
-                </div>
-            </div>
+                }
+                extra={[
+                    <Flex gap="middle" justify="center">
+                        <Button onClick={onCancel} disabled={loading}>
+                            Batal
+                        </Button>
+                        <Button danger type="primary" onClick={onConfirm} loading={loading}>
+                            Hapus ({selectedItems.length} faktur)
+                        </Button>
+                    </Flex>
+                ]}
+            />
         </Modal>
     );
 };
@@ -270,12 +398,16 @@ const Faktur: React.FC = () => {
     const { isAuthenticated, token } = useAuth();
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [isEditModalVisible, setIsEditModalVisible] = useState(false);
-    const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
+    const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<FakturType | null>(null);
     const [searchText, setSearchText] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+    const [selectedItems, setSelectedItems] = useState<FakturType[]>([]);
+    const [deleteLoading, setDeleteLoading] = useState(false);
+    const [filters, setFilters] = useState<Record<string, any>>({});
     const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://api-efiling.vercel.app/';
-    // const navigate = useNavigate();
+    const navigate = useNavigate();
 
     const {
         data,
@@ -324,22 +456,24 @@ const Faktur: React.FC = () => {
     };
 
     const handleViewDetail = async (record: FakturType) => {
-        try {
-            const currentFaktur = await fetchFakturById(record.id);
-            if (currentFaktur) {
-                setCurrentRecord(currentFaktur as FakturType);
-                setIsDetailModalVisible(true);
-            }
-        } catch (err) {
-            const error = err as Error;
-            message.error('Gagal mengambil data faktur: ' + (error.message || 'Unknown error'));
-        }
+        navigate(`/dashboard/faktur/${record.id}`);
     };
 
     const handleDelete = async (id: string) => {
-        Modal.confirm({
+        confirm({
             title: 'Konfirmasi Penghapusan',
-            content: 'Apakah Anda yakin ingin menghapus faktur ini?',
+            icon: <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />,
+            content: (
+                <div>
+                    <p>Apakah Anda yakin ingin menghapus faktur ini?</p>
+                    <Alert
+                        message="Peringatan: Tindakan ini tidak dapat dibatalkan"
+                        type="error"
+                        showIcon
+                        style={{ marginTop: '16px' }}
+                    />
+                </div>
+            ),
             okText: 'Ya, Hapus',
             okType: 'danger',
             cancelText: 'Batal',
@@ -355,6 +489,27 @@ const Faktur: React.FC = () => {
                 }
             },
         });
+    };
+
+    const handleMultipleDelete = async () => {
+        setDeleteLoading(true);
+        try {
+            // Process deletions sequentially to ensure all are handled
+            for (const id of selectedRowKeys) {
+                await deleteFaktur(id.toString());
+            }
+
+            message.success(`${selectedRowKeys.length} faktur berhasil dihapus!`);
+            setSelectedRowKeys([]);
+            setSelectedItems([]);
+            setIsDeleteModalVisible(false);
+            // Refresh data will be triggered by event
+        } catch (err) {
+            const error = err as Error;
+            message.error('Gagal menghapus beberapa faktur: ' + (error.message || 'Unknown error'));
+        } finally {
+            setDeleteLoading(false);
+        }
     };
 
     const handleSubmit = async (formData: FormData) => {
@@ -410,14 +565,76 @@ const Faktur: React.FC = () => {
 
     const fakturData = data.paginatedData || [];
 
+    const handleFilterChange = (field: string, value: any) => {
+        const newFilters = { ...filters };
+
+        if (value === null || value === undefined || value === '') {
+            delete newFilters[field];
+        } else {
+            newFilters[field] = value;
+        }
+
+        setFilters(newFilters);
+    };
+
+    // Debugging log
+    console.log("Faktur Data Sebelum Filter:", fakturData);
+    console.log("Filters:", filters);
+    console.log("Search Text:", searchText);
+
     const filteredData = fakturData.filter((item: any) => {
-        return Object.values(item).some((val) => {
-            if (isSearchableValue(val)) {
-                return val.toString().toLowerCase().includes(searchText.toLowerCase());
+        for (const [field, value] of Object.entries(filters)) {
+            if (value !== undefined && value !== null && value !== '') {
+                if (field === 'jumlah_pengeluaran') {
+                    if (Number(item[field]) !== Number(value)) {
+                        return false;
+                    }
+                } else if (field === 'tanggal') {
+                    if (Array.isArray(value) && value.length === 2) {
+                        const itemDate = dayjs(item[field]);
+                        const startDate = dayjs(value[0]).startOf('day');
+                        const endDate = dayjs(value[1]).endOf('day');
+
+                        if (!itemDate.isSameOrAfter(startDate) || !itemDate.isSameOrBefore(endDate)) {
+                            return false;
+                        }
+                    }
+                } else if (typeof item[field] === 'string' && typeof value === 'string') {
+                    if (!item[field].toLowerCase().includes(value.toLowerCase())) {
+                        return false;
+                    }
+                } else if (item[field] !== value) {
+                    return false;
+                }
             }
-            return false;
-        });
+        }
+
+        if (searchText) {
+            const matchesSearch = Object.values(item).some((val) => {
+                if (isSearchableValue(val)) {
+                    return val.toString().toLowerCase().includes(searchText.toLowerCase());
+                }
+                return false;
+            });
+
+            if (!matchesSearch) {
+                return false;
+            }
+        }
+
+        return true;
     });
+
+    console.log("Filtered Data:", filteredData);
+
+    const rowSelection = {
+        selectedRowKeys,
+        onChange: (selectedKeys: React.Key[], selectedRows: FakturType[]) => {
+            setSelectedRowKeys(selectedKeys);
+            setSelectedItems(selectedRows);
+        },
+    };
+
 
     if (loading) {
         return <LoadingSkeleton />;
@@ -442,107 +659,432 @@ const Faktur: React.FC = () => {
             title: 'ID',
             dataIndex: 'id',
             key: 'id',
-            align: 'center' as const,
+            width: '15%',
             ellipsis: true,
+            filterDropdown: ({ confirm: confirmFilter }: any) => (
+                <div style={{ padding: 8 }}>
+                    <Input
+                        placeholder="Cari berdasarkan ID"
+                        value={filters.id || ''}
+                        onChange={e => handleFilterChange('id', e.target.value)}
+                        style={{ width: 188, marginBottom: 8, display: 'block' }}
+                    />
+                    <Space>
+                        <Button
+                            type="primary"
+                            onClick={() => confirmFilter()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Filter
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                handleFilterChange('id', '');
+                                confirmFilter();
+                            }}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Reset
+                        </Button>
+                    </Space>
+                </div>
+            ),
+            filterIcon: (filtered: boolean) => (
+                <FilterOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
+            ),
+        },
+        {
+            title: 'Tanggal',
+            dataIndex: 'tanggal',
+            key: 'tanggal',
+            width: '15%',
+            render: (text: string) => dayjs(text).format('DD MMM YYYY HH:mm'),
+            filterDropdown: ({ confirm: confirmFilter }: any) => (
+                <div style={{ padding: 8 }}>
+                    <DatePicker.RangePicker
+                        value={filters.tanggal || null}
+                        onChange={(dates) => handleFilterChange('tanggal', dates)}
+                        style={{ marginBottom: 8, display: 'block', width: '100%' }}
+                    />
+                    <Space>
+                        <Button
+                            type="primary"
+                            onClick={() => confirmFilter()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Filter
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                handleFilterChange('tanggal', null);
+                                confirmFilter();
+                            }}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Reset
+                        </Button>
+                    </Space>
+                </div>
+            ),
+            filterIcon: (filtered: boolean) => (
+                <FilterOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
+            ),
         },
         {
             title: 'Deskripsi',
             dataIndex: 'deskripsi',
             key: 'deskripsi',
-            align: 'center' as const,
+            width: '20%',
             ellipsis: true,
+            filterDropdown: ({ confirm: confirmFilter }: any) => (
+                <div style={{ padding: 8 }}>
+                    <Input
+                        placeholder="Cari deskripsi"
+                        value={filters.deskripsi || ''}
+                        onChange={e => handleFilterChange('deskripsi', e.target.value)}
+                        style={{ width: 188, marginBottom: 8, display: 'block' }}
+                    />
+                    <Space>
+                        <Button
+                            type="primary"
+                            onClick={() => confirmFilter()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+
+                            Filter
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                handleFilterChange('deskripsi', '');
+                                confirmFilter();
+                            }}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Reset
+                        </Button>
+                    </Space>
+                </div>
+            ),
+            filterIcon: (filtered: boolean) => (
+                <FilterOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
+            ),
+        },
+        {
+            title: 'Jumlah Pengeluaran',
+            dataIndex: 'jumlah_pengeluaran',
+            key: 'jumlah_pengeluaran',
+            width: '15%',
+            render: (text: number) => `Rp ${formatToIDR(text)}`,
+            filterDropdown: ({ confirm: confirmFilter }: any) => (
+                <div style={{ padding: 8 }}>
+                    <InputNumber
+                        placeholder="Masukkan jumlah"
+                        value={filters.jumlah_pengeluaran || null}
+                        onChange={val => handleFilterChange('jumlah_pengeluaran', val)}
+                        style={{ width: 188, marginBottom: 8, display: 'block' }}
+                        formatter={(value) =>
+                            value ? `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : ''
+                        }
+                        parser={(value) =>
+                            value ? Number(value.replace(/Rp\s?|(\.)/g, '')) || 0 : 0
+                        }
+                    />
+                    <Space>
+                        <Button
+                            type="primary"
+                            onClick={() => confirmFilter()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Filter
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                handleFilterChange('jumlah_pengeluaran', null);
+                                confirmFilter();
+                            }}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Reset
+                        </Button>
+                    </Space>
+                </div>
+            ),
+            filterIcon: (filtered: boolean) => (
+                <FilterOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
+            ),
+        },
+        {
+            title: 'Metode Pembayaran',
+            dataIndex: 'metode_pembayaran',
+            key: 'metode_pembayaran',
+            width: '15%',
+            render: (text: string) => {
+                const methodMap: Record<string, string> = {
+                    'cash': 'Cash',
+                    'transfer': 'Transfer Bank',
+                    'qris': 'QRIS',
+                    'kartu_kredit': 'Kartu Kredit',
+                    'kartu_debit': 'Kartu Debit'
+                };
+                return methodMap[text] || text;
+            },
+            filterDropdown: ({ confirm: confirmFilter }: any) => (
+                <div style={{ padding: 8 }}>
+                    <Select
+                        placeholder="Pilih metode"
+                        value={filters.metode_pembayaran || undefined}
+                        onChange={val => handleFilterChange('metode_pembayaran', val)}
+                        style={{ width: 188, marginBottom: 8, display: 'block' }}
+                        allowClear
+                    >
+                        <Option value="cash">Cash</Option>
+                        <Option value="transfer">Transfer Bank</Option>
+                        <Option value="qris">QRIS</Option>
+                        <Option value="kartu_kredit">Kartu Kredit</Option>
+                        <Option value="kartu_debit">Kartu Debit</Option>
+                    </Select>
+                    <Space>
+                        <Button
+                            type="primary"
+                            onClick={() => confirmFilter()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Filter
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                handleFilterChange('metode_pembayaran', undefined);
+                                confirmFilter();
+                            }}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Reset
+                        </Button>
+                    </Space>
+                </div>
+            ),
+            filterIcon: (filtered: boolean) => (
+                <FilterOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
+            ),
+        },
+        {
+            title: 'Status Pembayaran',
+            dataIndex: 'status_pembayaran',
+            key: 'status_pembayaran',
+            width: '15%',
+            render: (text: string) => {
+                let color = '';
+                let displayText = '';
+
+                switch (text) {
+                    case 'lunas':
+                        color = 'green';
+                        displayText = 'Lunas';
+                        break;
+                    case 'belum_lunas':
+                        color = 'volcano';
+                        displayText = 'Belum Lunas';
+                        break;
+                    case 'sebagian':
+                        color = 'gold';
+                        displayText = 'Dibayar Sebagian';
+                        break;
+                    case 'dibatalkan':
+                        color = 'red';
+                        displayText = 'Dibatalkan';
+                        break;
+                    default:
+                        color = 'blue';
+                        displayText = text;
+                }
+
+                return <Tag color={color}>{displayText}</Tag>;
+            },
+            filterDropdown: ({ confirm: confirmFilter }: any) => (
+                <div style={{ padding: 8 }}>
+                    <Select
+                        placeholder="Pilih status"
+                        value={filters.status_pembayaran || undefined}
+                        onChange={val => handleFilterChange('status_pembayaran', val)}
+                        style={{ width: 188, marginBottom: 8, display: 'block' }}
+                        allowClear
+                    >
+                        <Option value="lunas">Lunas</Option>
+                        <Option value="belum_lunas">Belum Lunas</Option>
+                        <Option value="sebagian">Dibayar Sebagian</Option>
+                        <Option value="dibatalkan">Dibatalkan</Option>
+                    </Select>
+                    <Space>
+                        <Button
+                            type="primary"
+                            onClick={() => confirmFilter()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Filter
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                handleFilterChange('status_pembayaran', undefined);
+                                confirmFilter();
+                            }}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Reset
+                        </Button>
+                    </Space>
+                </div>
+            ),
+            filterIcon: (filtered: boolean) => (
+                <FilterOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
+            ),
         },
         {
             title: 'Aksi',
-            key: 'aksi',
-            align: 'center' as const,
-            render: (_: unknown, record: FakturType) => (
-                <Space>
+            key: 'action',
+            width: '15%',
+            render: (_: any, record: FakturType) => (
+                <Space size="small">
                     <Tooltip title="Lihat Detail">
                         <Button
                             type="primary"
                             icon={<EyeOutlined />}
                             onClick={() => handleViewDetail(record)}
+                            size="small"
                         />
                     </Tooltip>
                     <Tooltip title="Edit">
                         <Button
+                            type="default"
                             icon={<EditOutlined />}
                             onClick={() => handleEdit(record)}
+                            size="small"
                         />
                     </Tooltip>
                     <Tooltip title="Hapus">
                         <Button
-                            type="primary"
                             danger
                             icon={<DeleteOutlined />}
                             onClick={() => handleDelete(record.id)}
+                            size="small"
                         />
                     </Tooltip>
                 </Space>
             ),
         },
     ];
+    { console.log("Render Table, Data Length:", filteredData.length) }
+
 
     return (
-        <Content style={{ margin: '16px' }}>
-            <Card className="shadow-sm">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                    <div>
-                        <Title level={2} style={{ margin: 0 }}>
-                            <DollarOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                            Faktur
-                            <span style={{
-                                fontSize: '16px',
-                                backgroundColor: '#1890ff',
-                                color: 'white',
-                                borderRadius: '12px',
-                                padding: '2px 10px',
-                                marginLeft: '12px',
-                                display: 'inline-block',
-                                verticalAlign: 'middle'
-                            }}>
-                                {fakturData.length}
-                            </span>
-                        </Title>
-                        <Text type="secondary">Kelola semua faktur pembayaran Anda di sini</Text>
-                    </div>
-                    <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={() => setIsModalVisible(true)}
-                        size="large"
-                    >
-                        Tambah Faktur
-                    </Button>
+        <Content style={{ padding: '24px', backgroundColor: '#f0f2f5', minHeight: '100vh' }}>
+            <Card
+            >
+                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                    <Title level={4} style={{ margin: 0 }}>
+                        <DollarOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
+                        Faktur
+                        <Badge
+                            count={fakturData.length}
+                            showZero
+                            style={{ backgroundColor: '#1890ff', fontSize: '14px', left: '5px' }}
+                        />
+                    </Title>
+                    <Space>
+                        <Input
+                            placeholder="Cari faktur..."
+                            prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                            style={{ width: '250px' }}
+                            allowClear
+                        />
+                        <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={() => setIsModalVisible(true)}
+                        >
+                            Tambah Faktur
+
+                        </Button>
+                        <Tooltip title="Refresh Data">
+                            <Button
+                                icon={<ReloadOutlined />}
+                                onClick={refreshDataCallback}
+                            />
+                        </Tooltip>
+                    </Space>
                 </div>
 
-                <div style={{ marginBottom: 16 }}>
-                    <Input
-                        placeholder="Cari faktur..."
-                        prefix={<SearchOutlined />}
-                        onChange={(e) => setSearchText(e.target.value)}
-                        style={{ width: 300 }}
-                        allowClear
+                {selectedRowKeys.length > 0 && (
+                    <Alert
+                        message={
+                            <Space>
+                                <span>
+                                    <Text strong>{selectedRowKeys.length}</Text> faktur dipilih
+                                </span>
+                                <Button
+                                    danger
+                                    type="primary"
+                                    size="small"
+                                    onClick={() => setIsDeleteModalVisible(true)}
+                                >
+                                    Hapus yang dipilih
+                                </Button>
+                                <Button
+                                    size="small"
+                                    onClick={() => setSelectedRowKeys([])}
+                                >
+                                    Batal
+                                </Button>
+                            </Space>
+                        }
+                        type="info"
+                        style={{ marginBottom: '16px' }}
                     />
-                </div>
+                )}
 
-                <Table
-                    columns={columns}
-                    dataSource={filteredData}
-                    rowKey="id"
-                    loading={loading}
-                    pagination={{
-                        pageSize: 10,
-                        showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} faktur`,
-                        showSizeChanger: true,
-                        showQuickJumper: true,
-                    }}
-                    scroll={{ x: 'max-content' }}
-                />
+                {filteredData.length === 0 ? (
+                    <Table
+                        columns={columns}
+                        dataSource={filteredData || []}
+                        rowKey="id"
+                        pagination={{ pageSize: 10 }}
+                        locale={{
+                            emptyText: Object.keys(filters).length > 0 || searchText
+                                ? "Tidak ada data yang sesuai dengan filter"
+                                : "Belum ada data faktur"
+                        }}
+                        rowSelection={rowSelection}
+                    />
+                ) : (
+                    <Table
+                        columns={columns}
+                        dataSource={filteredData || []}
+                        rowKey="id"
+                        pagination={{ pageSize: 10 }}
+                        locale={{ emptyText: "Tidak ada data yang sesuai dengan filter" }}
+                    />
+                )}
             </Card>
 
-            {/* Create Form Modal */}
             <FakturForm
                 visible={isModalVisible}
                 onCancel={() => setIsModalVisible(false)}
@@ -550,27 +1092,21 @@ const Faktur: React.FC = () => {
                 submitting={submitting}
             />
 
-            {/* Edit Form Modal */}
             <FakturForm
                 visible={isEditModalVisible}
-                onCancel={() => {
-                    setIsEditModalVisible(false);
-                    setCurrentRecord(null);
-                }}
+                onCancel={() => setIsEditModalVisible(false)}
                 onSubmit={handleUpdate}
                 submitting={submitting}
                 initialValues={currentRecord}
                 isEdit={true}
             />
 
-            {/* Detail Modal */}
-            <FakturDetailModal
-                visible={isDetailModalVisible}
-                onCancel={() => {
-                    setIsDetailModalVisible(false);
-                    setCurrentRecord(null);
-                }}
-                record={currentRecord}
+            <DeleteConfirmationModal
+                visible={isDeleteModalVisible}
+                onCancel={() => setIsDeleteModalVisible(false)}
+                onConfirm={handleMultipleDelete}
+                selectedItems={selectedItems}
+                loading={deleteLoading}
             />
         </Content>
     );

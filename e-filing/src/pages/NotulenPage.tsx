@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {
     Layout,
@@ -15,11 +15,11 @@ import {
     Tooltip,
     Upload,
     Alert,
-    Image,
     DatePicker,
     Select,
     Divider,
-    Tag
+    Tag,
+    Badge
 } from 'antd';
 import {
     PlusOutlined,
@@ -30,7 +30,10 @@ import {
     FileTextOutlined,
     SearchOutlined,
     FileProtectOutlined,
-    UserOutlined
+    UserOutlined,
+    ReloadOutlined,
+    ExclamationCircleOutlined,
+    FilterOutlined
 } from '@ant-design/icons';
 import { UploadProps } from 'antd';
 import { useNotulenCache } from '../hooks/useNotulenCache';
@@ -39,6 +42,7 @@ import { eventBus, DATA_EVENTS } from '../utils/eventBus';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
+import { ColumnType } from 'antd/es/table';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -73,7 +77,14 @@ interface Participant {
     name: string;
     type: 'registered' | 'custom';
 }
-
+// type FilterState = Partial<{
+//     status: string;
+//     date: Dayjs | null;
+//     judul: string;
+//     lokasi: string;
+//     tanggal_rapat: string;
+//     pemimpin_rapat: string;
+// }>;
 interface NotulenType {
     id: string;
     judul: string;
@@ -520,8 +531,13 @@ export const NotulenForm: React.FC<FormProps> = ({
                     label="Status"
                     rules={[{ required: true, message: 'Mohon isi status notulen!' }]}
                 >
-                    <Input placeholder="Masukkan status notulen" />
+                    <Select placeholder="Pilih status notulen">
+                        <Option value="pending">Pending</Option>
+                        <Option value="dibatalkan">Dibatalkan</Option>
+                        <Option value="disetujui">Disetujui</Option>
+                    </Select>
                 </Form.Item>
+
 
                 <Form.Item
                     name="dokumen_lampiran"
@@ -547,155 +563,115 @@ export const NotulenForm: React.FC<FormProps> = ({
     );
 };
 
-export const NotulenDetailModal: React.FC<{
+const DeleteConfirmationModal: React.FC<{
     visible: boolean;
     onCancel: () => void;
-    record: NotulenType | null;
-}> = ({ visible, onCancel, record }) => {
-    if (!record) return null;
+    onConfirm: () => void;
+    selectedItems: NotulenType[];
+    loading: boolean;
+}> = ({ visible, onCancel, onConfirm, selectedItems, loading }) => (
+    <Modal
+        title="Konfirmasi Penghapusan"
+        visible={visible}
+        onCancel={onCancel}
+        footer={[
+            <Button key="back" onClick={onCancel}>
+                Batal
+            </Button>,
+            <Button
+                key="submit"
+                type="primary"
+                danger
+                loading={loading}
+                onClick={onConfirm}
+            >
+                Hapus
+            </Button>
+        ]}
+    >
+        <p>Apakah Anda yakin ingin menghapus {selectedItems.length} notulen?</p>
+    </Modal>
+);
 
-    const formattedDate = record.tanggal
-        ? dayjs(record.tanggal).format('DD MMMM YYYY')
-        : '-';
-
-    const displayParticipants = () => {
-        if (!record.peserta) return null;
-
-        let participants: Participant[] = [];
-
-        try {
-            const parsed = JSON.parse(record.peserta);
-            if (Array.isArray(parsed)) {
-                participants = parsed;
-            } else {
-                return (
-                    <div style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>
-                        {record.peserta}
-                    </div>
-                );
-            }
-        } catch {
-            return (
-                <div style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>
-                    {record.peserta}
-                </div>
-            );
+const EnhancedDeleteConfirmationModal: React.FC<{
+    visible: boolean;
+    onCancel: () => void;
+    onConfirm: () => void;
+    selectedItems: NotulenType[];
+    loading: boolean;
+}> = ({ visible, onCancel, onConfirm, selectedItems, loading }) => (
+    <Modal
+        title={
+            <div style={{ display: 'flex', alignItems: 'center', color: '#ff4d4f' }}>
+                <ExclamationCircleOutlined style={{ fontSize: '24px', marginRight: '10px' }} />
+                Konfirmasi Penghapusan
+            </div>
         }
+        visible={visible}
+        onCancel={onCancel}
+        footer={[
+            <Button key="back" onClick={onCancel}>
+                Batalkan
+            </Button>,
+            <Button
+                key="submit"
+                type="primary"
+                danger
+                loading={loading}
+                onClick={onConfirm}
+                icon={<DeleteOutlined />}
+            >
+                Hapus ({selectedItems.length})
+            </Button>
+        ]}
+        width={500}
+    >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <Alert
+                message="Perhatian"
+                description={`Anda akan menghapus ${selectedItems.length} notulen. Tindakan ini tidak dapat dibatalkan.`}
+                type="warning"
+                showIcon
+            />
 
-
-        return (
-            <div style={{ marginTop: '8px' }}>
-                <ul style={{ paddingLeft: '20px', margin: 0 }}>
-                    {participants.map((participant, index) => (
-                        <li key={index} style={{ marginBottom: '4px' }}>
-                            {participant.type === 'registered' ? (
-                                <Tag color="blue">
-                                    <UserOutlined style={{ marginRight: 4 }} />
-                                    {participant.name}
-                                </Tag>
-                            ) : (
-                                <Tag color="green">{participant.name}</Tag>
-                            )}
+            <div>
+                <Text strong>Detail Notulen yang Akan Dihapus:</Text>
+                <ul style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                    {selectedItems.map((item, index) => (
+                        <li key={item.id}>
+                            <Text type="secondary">
+                                {index + 1}. {item.judul}
+                                <Text type="secondary" style={{ marginLeft: '10px' }}>
+                                    ({dayjs(item.tanggal).format('DD/MM/YYYY')})
+                                </Text>
+                            </Text>
                         </li>
                     ))}
                 </ul>
             </div>
-        );
-    };
+        </div>
+    </Modal>
+);
 
-    return (
-        <Modal
-            title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <FileProtectOutlined style={{ color: '#1890ff' }} />
-                    <span>Detail Notulen</span>
-                </div>
-            }
-            open={visible}
-            onCancel={onCancel}
-            footer={[
-                <Button key="close" onClick={onCancel}>
-                    Tutup
-                </Button>
-            ]}
-            width={700}
-        >
-            <div style={{ marginBottom: '20px' }}>
-                <div style={{ marginBottom: '8px' }}>
-                    <strong>ID:</strong> {record.id}
-                </div>
-                <div style={{ marginBottom: '8px' }}>
-                    <strong>Judul:</strong> {record.judul}
-                </div>
-                <div style={{ marginBottom: '8px' }}>
-                    <strong>Tanggal Rapat:</strong> {formattedDate}
-                </div>
-                <div style={{ marginBottom: '8px' }}>
-                    <strong>Lokasi:</strong> {record.lokasi}
-                </div>
-                <div style={{ marginBottom: '8px' }}>
-                    <strong>Pemimpin Rapat:</strong> {record.pemimpin_rapat}
-                </div>
-                <div style={{ marginBottom: '8px' }}>
-                    <strong>Status:</strong> {record.status}
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                    <strong>Peserta:</strong>
-                    {displayParticipants()}
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                    <strong>Agenda:</strong>
-                    <p style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>{record.agenda}</p>
-                </div>
-                {record.created_by && (
-                    <div style={{ marginBottom: '8px' }}>
-                        <strong>Dibuat Oleh:</strong> {record.created_by}
-                    </div>
-                )}
-                {record.updated_by && (
-                    <div style={{ marginBottom: '8px' }}>
-                        <strong>Diperbarui Oleh:</strong> {record.updated_by}
-                    </div>
-                )}
-                <div>
-                    <strong>Dokumen Lampiran:</strong>
-                    <div style={{ marginTop: '12px' }}>
-                        {record.dokumen_lampiran && (
-                            record.dokumen_lampiran.toLowerCase().endsWith('.pdf') ||
-                                record.dokumen_lampiran.toLowerCase().endsWith('.doc') ||
-                                record.dokumen_lampiran.toLowerCase().endsWith('.docx') ? (
-                                <a href={record.dokumen_lampiran} target="_blank" rel="noopener noreferrer">
-                                    <Button type="primary" icon={<FileTextOutlined />}>
-                                        Lihat Dokumen
-                                    </Button>
-                                </a>
-                            ) : (
-                                <Image
-                                    src={record.dokumen_lampiran}
-                                    alt="Dokumen Lampiran"
-                                    style={{ maxWidth: '100%' }}
-                                />
-                            )
-                        )}
-                    </div>
-                </div>
-            </div>
-        </Modal>
-    );
-};
-
-// Export the main component (fixing the "Notulen is assigned a value but never used" error)
 export default function NotulenPage() {
     const { isAuthenticated, token } = useAuth();
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [isEditModalVisible, setIsEditModalVisible] = useState(false);
-    const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<NotulenType | null>(null);
     const [searchText, setSearchText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://api-efiling.vercel.app/';
-    const navigate = useNavigate();
 
+    const [tableFilters, setTableFilters] = useState<Record<string, string[]>>({});
+
+    const [filters] = useState<Record<string, any>>({});
+
+    const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+    const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+    const [deleteLoading, setDeleteLoading] = useState(false);
+
+    const navigate = useNavigate();
 
     const {
         data,
@@ -707,10 +683,96 @@ export default function NotulenPage() {
         refreshData
     } = useNotulenCache(BASE_URL);
 
-    // Create a memoized callback for refreshData to avoid recreating it on every render
+    const notulenData = useMemo(() =>
+        data?.paginatedData || [],
+        [data?.paginatedData]
+    );
+
+    const handleFilterChange = (field: string, value: (string | number)[], confirm: () => void) => {
+        setTableFilters((prev) => {
+            const newFilters = { ...prev };
+
+            if (!value || value.length === 0) {
+                delete newFilters[field];
+            } else {
+                // Pastikan value selalu array
+                newFilters[field] = value as string[];
+            }
+
+            return newFilters;
+        });
+
+        confirm();
+    };
+
+    const handleClearFilters = (confirm: () => void) => {
+        setTableFilters({});
+        confirm(); // Konfirmasi agar tabel ter-refresh
+    };
+
+
     const refreshDataCallback = useCallback(() => {
         refreshData();
     }, [refreshData]);
+
+    const filteredData = useMemo(() => {
+        let result = [...notulenData];
+
+        if (filters.status) {
+            result = result.filter(item => item.status === filters.status);
+        }
+
+        if (filters.date) {
+            result = result.filter(item =>
+                dayjs(item.tanggal).isSame(filters.date, 'day')
+            );
+        }
+
+        if (searchText.trim() !== "") {
+            const searchLower = searchText.toLowerCase();
+            result = result.filter(item =>
+                item.judul.toLowerCase().includes(searchLower) ||
+                item.pemimpin_rapat.toLowerCase().includes(searchLower) ||
+                item.lokasi.toLowerCase().includes(searchLower)
+            );
+        }
+
+        return result;
+    }, [notulenData, filters, searchText]);
+
+
+
+
+    const selectedItems = useMemo(() =>
+        filteredData.filter(item => selectedRowKeys.includes(item.id)),
+        [filteredData, selectedRowKeys]
+    );
+
+    const handleMultipleDelete = async () => {
+        setDeleteLoading(true);
+        try {
+            // Parallel deletion
+            await Promise.all(selectedItems.map(item => deleteNotulen(item.id)));
+
+            message.success(`${selectedItems.length} notulen berhasil dihapus!`);
+            setSelectedRowKeys([]);
+            setIsDeleteModalVisible(false);
+        } catch (err) {
+            const error = err as Error;
+            message.error(`Gagal menghapus notulen: ${error.message || 'Unknown error'}`);
+        } finally {
+            setDeleteLoading(false);
+        }
+    };
+
+    const rowSelection = {
+        selectedRowKeys,
+        onChange: (newSelectedRowKeys: React.Key[]) => {
+            setSelectedRowKeys(newSelectedRowKeys);
+        }
+    };
+
+
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -745,27 +807,6 @@ export default function NotulenPage() {
 
     const handleViewDetail = (record: NotulenType) => {
         navigate(`/dashboard/notulen/${record.id}`);
-    };
-
-    const handleDelete = async (id: string) => {
-        Modal.confirm({
-            title: 'Konfirmasi Penghapusan',
-            content: 'Apakah Anda yakin ingin menghapus notulen ini?',
-            okText: 'Ya, Hapus',
-            okType: 'danger',
-            cancelText: 'Batal',
-            onOk: async () => {
-                try {
-                    await deleteNotulen(id);
-                    message.success('Notulen berhasil dihapus!');
-                    // No need to call refreshData here, it will be triggered by the event
-                } catch (err) {
-                    const error = err as Error;
-                    console.error('Error deleting notulen:', error);
-                    message.error(error.message || 'Gagal menghapus notulen!');
-                }
-            },
-        });
     };
 
     const handleSubmit = async (formData: FormData) => {
@@ -814,79 +855,273 @@ export default function NotulenPage() {
         }
     };
 
-    // Helper function for type checking
-    const isSearchableValue = (value: unknown): value is string => {
-        return typeof value === 'string' || typeof value === 'number';
-    };
-
-    const notulenData = data.paginatedData || [];
-
-    const filteredData = notulenData.filter((item: any) => {
-        return Object.values(item).some((val) => {
-            if (isSearchableValue(val)) {
-                return val.toString().toLowerCase().includes(searchText.toLowerCase());
-            }
-            return false;
-        });
-    });
 
     if (loading) {
         return <LoadingSkeleton />;
     }
 
-    if (error) {
-        return (
-            <div>
-                <Alert
-                    message="Error"
-                    description={error}
-                    type="error"
-                    showIcon
-                />
-                <Button onClick={refreshData}>Coba lagi</Button>
-            </div>
-        );
-    }
-
-    const columns = [
+    if (loading) return <LoadingSkeleton />;
+    if (error) return (
+        <div>
+            <Alert
+                message="Error"
+                description={error}
+                type="error"
+                showIcon
+            />
+            <Button onClick={refreshData}>Coba lagi</Button>
+        </div>
+    );
+    const columns: ColumnType<NotulenType>[] = [
+        // Perbaikan pada kolom Judul
         {
             title: 'Judul',
             dataIndex: 'judul',
             key: 'judul',
-            align: 'center' as const,
-            ellipsis: true,
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm }) => (
+                <div className="p-2">
+                    <Input
+                        placeholder="Cari judul"
+                        value={selectedKeys[0]}
+                        onChange={(e) =>
+                            setSelectedKeys(e.target.value ? [e.target.value] : []) // Pastikan selalu array
+                        }
+                        onPressEnter={() => confirm()}
+                        className="mb-2 block"
+                    />
+                    <Space>
+                        <Button
+                            onClick={() => {
+                                // Konversi `selectedKeys` ke string[] sebelum dikirim
+                                handleFilterChange("judul", selectedKeys.map(String), confirm);
+                            }}
+                            type="primary"
+                            size="small"
+                        >
+                            Cari
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                setSelectedKeys([]);
+                                handleClearFilters(confirm);
+                            }}
+                            size="small"
+                        >
+                            Reset
+                        </Button>
+                    </Space>
+                </div>
+            ),
+            onFilter: (value, record) =>
+                record.judul.toLowerCase().includes(value.toString().toLowerCase()),
+            // Pastikan filteredValue selalu array
+            filteredValue: tableFilters['judul']?.length > 0 ? tableFilters['judul'] : null
         },
         {
             title: 'Tanggal Rapat',
             dataIndex: 'tanggal',
             key: 'tanggal',
-            align: 'center' as const,
-            render: (date: string) => dayjs(date).format('DD/MM/YYYY')
+            align: 'center',
+            render: (date: string) => dayjs(date).format('DD/MM/YYYY'),
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+                <div style={{ padding: 8 }}>
+                    <DatePicker
+                        value={selectedKeys[0] ? dayjs(selectedKeys[0] as string) : null}
+                        onChange={(date) => setSelectedKeys(date ? [date.format('YYYY-MM-DD')] : [])}
+                        style={{ marginBottom: 8, display: 'block' }}
+                        placeholder="Pilih tanggal"
+                    />
+                    <Space>
+                        <Button
+                            type="primary"
+                            onClick={() => confirm()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Cari
+                        </Button>
+                        <Button
+                            onClick={() => clearFilters?.()}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Reset
+                        </Button>
+                    </Space>
+                </div>
+            ),
+            filterIcon: (filtered) => (
+                <FilterOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
+            ),
+            onFilter: (value, record) => dayjs(record.tanggal).format('YYYY-MM-DD') === value,
+
+            // ✅ Tambahkan Sorting ASC & DESC
+            sorter: (a, b) => dayjs(a.tanggal).unix() - dayjs(b.tanggal).unix(),
+            sortDirections: ['ascend', 'descend'], // Menentukan arah sorting
         },
         {
             title: 'Lokasi',
             dataIndex: 'lokasi',
             key: 'lokasi',
-            align: 'center' as const,
+            align: 'center',
             ellipsis: true,
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+                <div style={{ padding: 8 }}>
+                    <Input
+                        placeholder="Cari lokasi"
+                        value={selectedKeys[0]}
+                        onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+                        onPressEnter={() => confirm()}
+                        style={{ marginBottom: 8, display: 'block' }}
+                    />
+                    <Space>
+                        <Button
+                            type="primary"
+                            onClick={() => confirm()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Cari
+                        </Button>
+                        <Button
+                            onClick={() => clearFilters?.()}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Reset
+                        </Button>
+                    </Space>
+                </div>
+            ),
+            filterIcon: (filtered) => (
+                <FilterOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
+            ),
+            onFilter: (value, record) =>
+                record.lokasi.toLowerCase().includes(value.toString().toLowerCase()),
         },
         {
             title: 'Pemimpin Rapat',
             dataIndex: 'pemimpin_rapat',
             key: 'pemimpin_rapat',
-            align: 'center' as const,
+            align: 'center',
             ellipsis: true,
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+                <div style={{ padding: 8 }}>
+                    <Input
+                        placeholder="Cari pemimpin"
+                        value={selectedKeys[0]}
+                        onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+                        onPressEnter={() => confirm()}
+                        style={{ marginBottom: 8, display: 'block' }}
+                    />
+                    <Space>
+                        <Button
+                            type="primary"
+                            onClick={() => confirm()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Cari
+                        </Button>
+                        <Button
+                            onClick={() => clearFilters?.()}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Reset
+                        </Button>
+                    </Space>
+                </div>
+            ),
+            filterIcon: (filtered) => (
+                <FilterOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
+            ),
+            onFilter: (value, record) =>
+                record.pemimpin_rapat.toLowerCase().includes(value.toString().toLowerCase()),
         },
+        // {
+        //     title: 'Status',
+        //     dataIndex: 'status',
+        //     key: 'status',
+        //     align: 'center',
+        //     render: (status: string) => {
+        //         const statusColors: Record<string, string> = {
+        //             'draft': 'warning',
+        //             'published': 'success',
+        //             'archived': 'default'
+        //         };
+        //         return <Tag color={statusColors[status?.toLowerCase()] || 'processing'}>
+        //             {status || 'Unknown'}
+        //         </Tag>;
+        //     },
+        //     filters: [
+        //         { text: 'Draft', value: 'draft' },
+        //         { text: 'Published', value: 'published' },
+        //         { text: 'Archived', value: 'archived' }
+        //     ],
+        //     onFilter: (value, record) => record.status === value,
+        // },
         {
             title: 'Status',
             dataIndex: 'status',
             key: 'status',
-            align: 'center' as const,
+            width: '15%',
+            render: (text: string) => {
+                const statusMap: Record<string, string> = {
+                    'pending': 'Pending',
+                    'dibatalkan': 'Dibatalkan',
+                    'disetujui': 'Disetujui'
+                };
+                return statusMap[text] || text;
+            },
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+                <div style={{ padding: 8 }}>
+                    <Select
+                        placeholder="Pilih status"
+                        value={selectedKeys[0] || undefined}
+                        onChange={val => setSelectedKeys(val ? [val] : [])}
+                        style={{ width: 188, marginBottom: 8, display: 'block' }}
+                        allowClear
+                    >
+                        <Option value="pending">Pending</Option>
+                        <Option value="dibatalkan">Dibatalkan</Option>
+                        <Option value="disetujui">Disetujui</Option>
+                    </Select>
+                    <Space>
+                        <Button
+                            type="primary"
+                            onClick={() => confirm()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Filter
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                setSelectedKeys([]);
+                                clearFilters?.();
+                            }}
+                            size="small"
+                            style={{ width: 90 }}
+                        >
+                            Reset
+                        </Button>
+                    </Space>
+                </div>
+            ),
+            filterIcon: (filtered: boolean) => (
+                <FilterOutlined style={{ color: filtered ? '#1890ff' : undefined }} />
+            ),
+            onFilter: (value, record) => record.status === value,
         },
         {
             title: 'Aksi',
             key: 'aksi',
-            align: 'center' as const,
+            align: 'center',
             render: (_: unknown, record: NotulenType) => (
                 <Space>
                     <Tooltip title="Lihat Detail">
@@ -906,7 +1141,7 @@ export default function NotulenPage() {
                         <Button
                             danger
                             icon={<DeleteOutlined />}
-                            onClick={() => handleDelete(record.id)}
+                            onClick={() => handleDeleteSingle(record)}
                         />
                     </Tooltip>
                 </Space>
@@ -914,21 +1149,34 @@ export default function NotulenPage() {
         },
     ];
 
+    const handleDeleteSingle = (record: NotulenType) => {
+        setSelectedRowKeys([record.id]);
+        setIsDeleteModalVisible(true);
+    };
+
+
     return (
         <Layout>
-            <Content style={{ padding: '24px', minHeight: 'calc(100vh - 64px)' }}>
+            <Content style={{ padding: '24px', backgroundColor: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
                 <Card>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                        <Title level={4}>
-                            <FileProtectOutlined /> Daftar Notulen
+                    <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                        <Title level={4} style={{ margin: 0 }}>
+                            <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                            Notulen
+                            <Badge
+                                count={notulenData.length}
+                                showZero
+                                style={{ backgroundColor: '#1890ff', fontSize: '14px', left: '5px' }}
+                            />
                         </Title>
-                        <div>
+                        <Space>
                             <Input
                                 placeholder="Cari notulen..."
+                                prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
                                 value={searchText}
                                 onChange={(e) => setSearchText(e.target.value)}
-                                style={{ width: 250, marginRight: 16 }}
-                                prefix={<SearchOutlined />}
+                                style={{ width: '250px' }}
+                                allowClear
                             />
                             <Button
                                 type="primary"
@@ -940,20 +1188,68 @@ export default function NotulenPage() {
                             >
                                 Tambah Notulen
                             </Button>
-                        </div>
+                            <Tooltip title="Refresh Data">
+                                <Button
+                                    icon={<ReloadOutlined />}
+                                    onClick={refreshDataCallback}
+                                />
+                            </Tooltip>
+                        </Space>
                     </div>
 
+                    {selectedRowKeys && selectedRowKeys.length > 0 && (
+                        <Alert
+                            message={
+                                <Space>
+                                    <span>
+                                        <Text strong>{selectedRowKeys.length}</Text> notulen dipilih
+                                    </span>
+                                    <Button
+                                        danger
+                                        type="primary"
+                                        size="small"
+                                        onClick={() => setIsDeleteModalVisible(true)}
+                                    >
+                                        Hapus yang dipilih
+                                    </Button>
+                                    <Button
+                                        size="small"
+                                        onClick={() => setSelectedRowKeys([])}
+                                    >
+                                        Batal
+                                    </Button>
+                                </Space>
+                            }
+                            type="info"
+                            style={{ marginBottom: '16px' }}
+                        />
+                    )}
+
                     <Table
-                        dataSource={filteredData}
                         columns={columns}
+                        dataSource={filteredData}
                         rowKey="id"
                         pagination={{
                             pageSize: 10,
-                            showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} item`,
+                            showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} item`
                         }}
+                        locale={{
+                            emptyText: Object.keys(filters).length > 0 || searchText
+                                ? "Tidak ada data yang sesuai dengan filter"
+                                : "Belum ada data notulen"
+                        }}
+                        rowSelection={rowSelection}
                         scroll={{ x: 'max-content' }}
+                        loading={loading}
                     />
                 </Card>
+                <EnhancedDeleteConfirmationModal
+                    visible={isDeleteModalVisible}
+                    onCancel={() => setIsDeleteModalVisible(false)}
+                    onConfirm={handleMultipleDelete}
+                    selectedItems={selectedItems}
+                    loading={deleteLoading}
+                />
 
                 <NotulenForm
                     visible={isModalVisible}
@@ -971,10 +1267,12 @@ export default function NotulenPage() {
                     isEdit={true}
                 />
 
-                <NotulenDetailModal
-                    visible={isDetailModalVisible}
-                    onCancel={() => setIsDetailModalVisible(false)}
-                    record={currentRecord}
+                <DeleteConfirmationModal
+                    visible={isDeleteModalVisible}
+                    onCancel={() => setIsDeleteModalVisible(false)}
+                    onConfirm={handleMultipleDelete}
+                    selectedItems={selectedItems}
+                    loading={deleteLoading}
                 />
             </Content>
         </Layout>

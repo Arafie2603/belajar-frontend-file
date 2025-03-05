@@ -16,10 +16,10 @@ import {
     Calendar,
     Alert,
     Empty,
-    Tabs,
     Button,
     Dropdown,
-    Menu
+    Menu,
+    Radio
 } from 'antd';
 import {
     MailOutlined,
@@ -27,7 +27,6 @@ import {
     FileTextOutlined,
     UserOutlined,
     FileDoneOutlined,
-    ClockCircleOutlined,
     BellOutlined,
     CalendarOutlined,
     ReloadOutlined,
@@ -38,6 +37,7 @@ import {
 } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import useDashboardData from '../hooks/useDashboardData';
+import ExpenseChart from '../components/ExpenseChart'; // Import the new component
 
 const { Title, Text } = Typography;
 
@@ -141,7 +141,7 @@ const Dashboard: React.FC = () => {
                 background: '#f0f5ff',
                 borderRadius: '8px 8px 0 0',
                 marginBottom: '8px',
-                padding: '8px 16px'
+                paddingBlock: '8px 16px'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                     <Button
@@ -328,15 +328,13 @@ const Dashboard: React.FC = () => {
                 borderRadius: '12px',
                 overflow: 'hidden',
                 border: 'none',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.05)'
             }}
-            styles={{
-                body: {
-                    padding: '24px',
-                    background: `linear-gradient(135deg, ${color}10, ${color}01)`,
-                    position: 'relative',
-                    overflow: 'hidden',
-                },
+            bodyStyle={{
+                padding: '24px',
+                background: `linear-gradient(135deg, ${color}10, ${color}01)`,
+                position: 'relative',
+                overflow: 'hidden'
             }}
         >
             <div style={{ position: 'absolute', right: '-15px', top: '-15px', opacity: 0.1, fontSize: '100px', color: color }}>
@@ -409,7 +407,7 @@ const Dashboard: React.FC = () => {
                                     border: 'none',
                                     boxShadow: '0 2px 12px rgba(0,0,0,0.05)'
                                 }}
-                                styles={{ body: { padding: '24px' } }}
+                                bodyStyle={{ padding: '24px' }}
                             >
                                 <Row align="middle" gutter={16}>
                                     <Col xs={24} md={2}>
@@ -492,7 +490,7 @@ const Dashboard: React.FC = () => {
                                 value={stats.faktur}
                                 icon={<FileDoneOutlined />}
                                 color="#f5222d"
-                                description="Total faktur terdaftar"
+                                description="Total faktur tercatat"
                             />
                         </Col>
                         <Col xs={24} sm={12} md={6}>
@@ -501,112 +499,110 @@ const Dashboard: React.FC = () => {
                                 value={stats.notulen}
                                 icon={<FileTextOutlined />}
                                 color="#722ed1"
-                                description="Total notulen rapat"
+                                description="Total notulen rapat tercatat"
                             />
                         </Col>
                     </Row>
 
-                    <Row gutter={[16, 16]}>
-                        {/* Recent Documents */}
-                        <Col xs={24} lg={16}>
+                    {/* Expense Chart Section */}
+                    <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                        <Col xs={24}>
                             <Card
                                 title={
-                                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                                        <ClockCircleOutlined style={{ color: '#1890ff', marginRight: '8px', fontSize: '18px' }} />
-                                        <Text strong style={{ fontSize: '16px' }}>Dokumen Terbaru</Text>
-                                    </div>
+                                    <Space>
+                                        <FileDoneOutlined style={{ color: '#f5222d' }} />
+                                        <Text strong>Grafik Pengeluaran</Text>
+                                    </Space>
+                                }
+                                extra={
+                                    <Space>
+                                        <Radio.Group defaultValue="bulanan" buttonStyle="solid" size="small">
+                                            <Radio.Button value="mingguan">Mingguan</Radio.Button>
+                                            <Radio.Button value="bulanan">Bulanan</Radio.Button>
+                                            <Radio.Button value="tahunan">Tahunan</Radio.Button>
+                                        </Radio.Group>
+                                        <Button type="text" icon={<ReloadOutlined />} />
+                                    </Space>
                                 }
                                 style={{
                                     borderRadius: '12px',
+                                    overflow: 'hidden',
                                     border: 'none',
                                     boxShadow: '0 2px 12px rgba(0,0,0,0.05)'
                                 }}
-                                styles={{ body: { padding: '16px 8px' } }}
+                                bodyStyle={{ padding: '24px' }}
+                            >
+                                <ExpenseChart />
+                            </Card>
+                        </Col>
+                    </Row>
+
+                    {/* Main Content Tabs */}
+                    <Row gutter={[16, 16]}>
+                        <Col xs={24} md={16}>
+                            <Card
+                                title={
+                                    <Space>
+                                        <FileTextOutlined style={{ color: '#1890ff' }} />
+                                        <Text strong>Dokumen Terbaru</Text>
+                                    </Space>
+                                }
+                                style={{
+                                    borderRadius: '12px',
+                                    overflow: 'hidden',
+                                    border: 'none',
+                                    boxShadow: '0 2px 12px rgba(0,0,0,0.05)'
+                                }}
+                                bodyStyle={{ padding: 0 }}
                             >
                                 {recentDocs.length > 0 ? (
                                     <Table
                                         dataSource={recentDocs}
                                         columns={columns}
+                                        pagination={{ pageSize: 5 }}
                                         rowKey="id"
-                                        pagination={{
-                                            pageSize: 5,
-                                            hideOnSinglePage: true,
-                                            showTotal: (total) => `Total ${total} dokumen`,
-                                            style: { marginTop: '16px' }
-                                        }}
+                                        style={{ borderRadius: '12px', overflow: 'hidden' }}
                                         size="middle"
-                                        bordered={false}
-                                        style={{ boxShadow: 'none' }}
-                                        rowClassName={(record, index) => index % 2 === 0 ? 'table-row-light' : 'table-row-dark'}
                                     />
                                 ) : (
                                     <Empty
-                                        description="Tidak ada dokumen terbaru"
-                                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                        style={{ margin: '32px 0' }}
+                                        description="Belum ada dokumen terbaru"
+                                        style={{ padding: '40px 0' }}
                                     />
                                 )}
                             </Card>
                         </Col>
-
-                        <Col xs={24} lg={8}>
+                        <Col xs={24} md={8}>
                             <Card
                                 title={
-                                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                                        <CalendarOutlined style={{ color: '#1890ff', marginRight: '8px', fontSize: '18px' }} />
-                                        <Text strong style={{ fontSize: '16px' }}>Kalender Kegiatan</Text>
-                                    </div>
+                                    <Space>
+                                        <CalendarOutlined style={{ color: '#1890ff' }} />
+                                        <Text strong>Kalender Kegiatan</Text>
+                                    </Space>
                                 }
                                 style={{
                                     borderRadius: '12px',
+                                    overflow: 'hidden',
                                     border: 'none',
-                                    boxShadow: '0 2px 12px rgba(0,0,0,0.05)'
+                                    boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
+                                    height: '100%'
                                 }}
-                                styles={{ body: { padding: '0' } }}
+                                bodyStyle={{ padding: '0', height: 'calc(100% - 57px)' }}
                             >
                                 <Calendar
-                                    fullscreen={false}
-                                    cellRender={dateCellRender}
-                                    headerRender={headerRender}
                                     mode={calendarView}
-                                    style={{
-                                        background: 'white',
-                                        borderRadius: '0 0 12px 12px'
-                                    }}
+                                    fullscreen={false}
+                                    headerRender={headerRender}
+                                    dateCellRender={dateCellRender}
+                                    style={{ height: '100%' }}
                                 />
                             </Card>
                         </Col>
                     </Row>
                 </>
             )}
-            <Outlet />
 
-            <style>
-                {`
-                .table-row-light {
-                    background-color: white;
-                }
-                .table-row-dark {
-                    background-color: #f7f9fc;
-                }
-                .events {
-                    margin: 0;
-                    padding: 0;
-                    list-style: none;
-                }
-                .ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-calendar-date-content {
-                    height: auto;
-                    min-height: 50px;
-                }
-                .ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-calendar-date,
-                .ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-calendar-date-today {
-                    background: #e6f7ff;
-                }
-                .ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-calendar-date::before {
-                    border: 1px solid #1890ff;
-                }
-            `}
-            </style>
+            <Outlet />
         </div>
     );
 };
