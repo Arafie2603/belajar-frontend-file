@@ -7,7 +7,6 @@ import {
     Typography,
     Button,
     Space,
-    Spin,
     Alert,
     Divider,
     Tag,
@@ -23,7 +22,8 @@ import {
     Badge,
     Menu,
     Dropdown,
-    Tabs
+    Tabs,
+    Progress
 } from 'antd';
 import {
     FilePdfOutlined,
@@ -116,14 +116,28 @@ const DetailNotulen: React.FC = () => {
 
     const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://api-efiling.vercel.app/';
 
+    const [loadingProgress, setLoadingProgress] = useState<number>(0);
+
+
     useEffect(() => {
         const fetchNotulenDetail = async () => {
+            let loadingInterval: NodeJS.Timeout | undefined; 
+    
             try {
-                setLoading(true);
+                loadingInterval = setInterval(() => {
+                    setLoadingProgress(prev => {
+                        if (prev >= 90) {
+                            if (loadingInterval) clearInterval(loadingInterval);
+                            return prev;
+                        }
+                        return prev + 10;
+                    });
+                }, 300);
+    
                 const response = await axios.get(`${BASE_URL}api/notulen/${id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-
+    
                 setData(response.data.data);
                 setError(null);
             } catch (err: unknown) {
@@ -134,16 +148,21 @@ const DetailNotulen: React.FC = () => {
                 } else {
                     setError('An unknown error occurred');
                 }
-            }
-            finally {
-                setLoading(false);
+            } finally {
+                if (loadingInterval) clearInterval(loadingInterval); 
+                setLoadingProgress(100); 
+                setTimeout(() => {
+                    setLoading(false);
+                }, 500); 
             }
         };
-
+    
         if (id && token) {
             fetchNotulenDetail();
         }
     }, [id, token, BASE_URL]);
+    
+    
 
     const handleEdit = () => {
         if (data) {
@@ -205,14 +224,37 @@ const DetailNotulen: React.FC = () => {
 
     if (loading) {
         return (
-            <Content style={{ margin: '24px', padding: '50px', background: '#fff', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.09)' }}>
-                <div style={{ textAlign: 'center' }}>
-                    <Spin size="large" />
-                    <div style={{ marginTop: '16px' }}>
-                        <Text type="secondary">Memuat detail notulen...</Text>
-                    </div>
+            <div className="loading-screen" style={{
+                minHeight: '100vh',
+                backgroundColor: '#f7f9fc',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: '24px'
+            }}>
+                <div style={{ textAlign: 'center', maxWidth: '500px' }}>
+                    <FileTextOutlined style={{ fontSize: '64px', color: '#1890ff', marginBottom: '24px' }} />
+
+                    <Title level={3} style={{ marginBottom: '24px' }}>
+                        Memuat Data Notulen
+                    </Title>
+
+                    <Progress
+                        percent={loadingProgress}
+                        status="active"
+                        strokeColor={{
+                            '0%': '#108ee9',
+                            '100%': '#87d068',
+                        }}
+                        style={{ marginBottom: '24px' }}
+                    />
+
+                    <Text type="secondary">
+                        Mohon tunggu sebentar sementara kami memuat detail surat
+                    </Text>
                 </div>
-            </Content>
+            </div>
         );
     }
 

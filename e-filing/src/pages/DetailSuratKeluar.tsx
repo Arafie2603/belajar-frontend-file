@@ -7,10 +7,25 @@ import "../pdfworker";
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import {
-    ArrowLeftOutlined,
     FilePdfFilled,
 } from '@ant-design/icons';
-import { X, FileText, Calendar, Mail, Target, Hash, User, Eye, Download, Printer } from 'lucide-react';
+import {
+    ArrowLeft,
+    FileText,
+    Calendar,
+    Mail,
+    Target,
+    Hash,
+    User,
+    Download,
+    X,
+    ChevronLeft,
+    ChevronRight,
+    Info,
+    CheckCircle,
+    Clock,
+    Clipboard
+} from 'lucide-react';
 
 import headerPDF from '../assets/images-resource/headersurat.jpeg';
 
@@ -75,7 +90,7 @@ const processHtmlContent = (html: string): string => {
             (cell as HTMLElement).style.padding = '8px';
             (cell as HTMLElement).style.textAlign = 'left';
         });
-        
+
         // Style table headers
         const headers = table.querySelectorAll('th');
         headers.forEach(header => {
@@ -144,13 +159,13 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ filename }) => {
     const nextPage = () => changePage(1);
 
     return (
-        <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-4xl mx-auto">
+        <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-4xl mx-auto">
             {isLoading ? (
                 <div className="flex justify-center items-center h-60">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
                 </div>
             ) : error ? (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4">
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
                     <div className="flex">
                         <div className="flex-shrink-0">
                             <X className="h-5 w-5 text-red-500" />
@@ -162,29 +177,34 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ filename }) => {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center px-4 py-3 bg-gray-50 rounded-lg">
+                    <div className="flex justify-between items-center px-4 py-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg">
                         <div className="space-y-2">
-                            <p className="font-semibold">Page {pageNumber} of {numPages || 0}</p>
+                            <p className="font-semibold flex items-center">
+                                <Clipboard className="h-4 w-4 mr-2 text-indigo-600" />
+                                <span>Halaman {pageNumber} dari {numPages || 0}</span>
+                            </p>
                             <div className="flex space-x-2">
                                 <button
                                     onClick={previousPage}
                                     disabled={pageNumber <= 1}
-                                    className={`px-3 py-1 rounded ${pageNumber <= 1
+                                    className={`px-3 py-1 rounded-full flex items-center ${pageNumber <= 1
                                         ? "bg-gray-200 text-gray-400"
-                                        : "bg-blue-500 text-white hover:bg-blue-600"
+                                        : "bg-indigo-600 text-white hover:bg-indigo-700 transition-all duration-300"
                                         }`}
                                 >
-                                    Previous
+                                    <ChevronLeft className="h-4 w-4 mr-1" />
+                                    <span>Previous</span>
                                 </button>
                                 <button
                                     onClick={nextPage}
                                     disabled={pageNumber >= (numPages || 0)}
-                                    className={`px-3 py-1 rounded ${pageNumber >= (numPages || 0)
+                                    className={`px-3 py-1 rounded-full flex items-center ${pageNumber >= (numPages || 0)
                                         ? "bg-gray-200 text-gray-400"
-                                        : "bg-blue-500 text-white hover:bg-blue-600"
+                                        : "bg-indigo-600 text-white hover:bg-indigo-700 transition-all duration-300"
                                         }`}
                                 >
-                                    Next
+                                    <span>Next</span>
+                                    <ChevronRight className="h-4 w-4 ml-1" />
                                 </button>
                             </div>
                         </div>
@@ -193,7 +213,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ filename }) => {
                             <a
                                 href={viewUrl}
                                 target="_blank"
-                                className="flex items-center px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
+                                className="flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-all duration-300 shadow-md"
                             >
                                 <Download className="mr-2 h-4 w-4" />
                                 Download PDF
@@ -201,18 +221,30 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ filename }) => {
                         )}
                     </div>
 
-                    <div className="flex justify-center shadow-lg rounded-lg overflow-hidden bg-gray-100 p-6">
+                    <div className="flex justify-center shadow-lg rounded-xl overflow-hidden bg-gray-100 p-6 border border-gray-200">
                         <Document
                             file={pdfBlob}
                             onLoadSuccess={onDocumentLoadSuccess}
-                            loading={<div className="animate-pulse bg-gray-200 h-96 w-full rounded"></div>}
+                            loading={
+                                <div className="flex flex-col items-center justify-center space-y-4 h-96 w-full">
+                                    <div className="animate-pulse bg-gray-200 h-4 w-32 rounded-full"></div>
+                                    <div className="animate-pulse bg-gray-200 h-64 w-full rounded-xl"></div>
+                                    <div className="animate-pulse bg-gray-200 h-4 w-48 rounded-full"></div>
+                                </div>
+                            }
                         >
                             <Page
                                 pageNumber={pageNumber}
                                 renderTextLayer={false}
                                 renderAnnotationLayer={false}
-                                scale={1.0}
-                                loading={<div className="animate-pulse bg-gray-200 h-96 w-full rounded"></div>}
+                                scale={1.2}
+                                loading={
+                                    <div className="flex flex-col items-center justify-center space-y-4 h-96 w-full">
+                                        <div className="animate-pulse bg-gray-200 h-4 w-32 rounded-full"></div>
+                                        <div className="animate-pulse bg-gray-200 h-64 w-full rounded-xl"></div>
+                                        <div className="animate-pulse bg-gray-200 h-4 w-48 rounded-full"></div>
+                                    </div>
+                                }
                             />
                         </Document>
                     </div>
@@ -223,12 +255,12 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ filename }) => {
 };
 
 const DetailItem: React.FC<DetailItemProps> = ({ icon, label, value }) => (
-    <div className="group bg-white border border-gray-200 p-4 rounded-lg transition-all duration-300 hover:shadow-md hover:border-blue-200 flex items-center space-x-4">
-        <div className="bg-blue-50 p-3 rounded-full text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all duration-300">
+    <div className="group bg-white border border-gray-200 p-4 rounded-xl transition-all duration-300 hover:shadow-lg hover:border-indigo-200 flex items-center space-x-4 transform hover:-translate-y-1">
+        <div className="bg-indigo-50 p-3 rounded-full text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
             {icon}
         </div>
         <div className="flex-1">
-            <p className="text-sm text-gray-500">{label}</p>
+            <p className="text-sm text-gray-500 font-medium">{label}</p>
             <p className="font-semibold text-gray-800 mt-1">{value}</p>
         </div>
     </div>
@@ -237,12 +269,13 @@ const DetailItem: React.FC<DetailItemProps> = ({ icon, label, value }) => (
 const DetailSuratKeluar = () => {
     const [surat, setSurat] = useState<SuratKeluar | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isPDFPreviewOpen, setIsPDFPreviewOpen] = useState(false);
+    // const [isModalOpen, setIsModalOpen] = useState(false);
+    // const [isPDFPreviewOpen, setIsPDFPreviewOpen] = useState(false);
     const [isPDF, setIsPDF] = useState(false);
     const [error, setError] = useState("");
     const [filename, setFilename] = useState<string | null>(null);
-
+    const [activePage, setActivePage] = useState("details"); // details, document, generate
+    const [darkMode, setDarkMode] = useState(false);
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
     const { id } = useParams();
@@ -303,16 +336,16 @@ const DetailSuratKeluar = () => {
                 unit: 'mm',
                 format: 'a4'
             });
-    
+
             // Add header image
             const headerImg = new Image();
             headerImg.src = headerPDF;
-    
+
             // We'll need to wait for the image to load
             await new Promise((resolve) => {
                 headerImg.onload = resolve;
             });
-    
+
             // Add header image
             pdf.addImage(
                 headerPDF,
@@ -322,44 +355,44 @@ const DetailSuratKeluar = () => {
                 190, // width
                 30 // height
             );
-    
+
             // Add title
             pdf.setFontSize(16);
             pdf.setFont("helvetica", "bold");
             pdf.text("SURAT KELUAR", 105, 50, { align: "center" });
-    
+
             // Reset font for content
             pdf.setFontSize(11);
             pdf.setFont("helvetica", "normal");
-    
+
             // Add letter details
             let yPos = 70;
-    
+
             // No. Surat
             pdf.text("No.", 20, yPos);
             pdf.text(": " + (surat?.surat_nomor || "-"), 60, yPos);
             yPos += 8;
-    
+
             // Tanggal
             pdf.text("Tanggal", 20, yPos);
             pdf.text(": " + formatDate(surat?.tanggal || ""), 60, yPos);
             yPos += 8;
-    
+
             // Lampiran
             pdf.text("Lampiran", 20, yPos);
             pdf.text(": " + (surat?.lampiran || "-"), 60, yPos);
             yPos += 16;
-    
+
             // Perihal
             pdf.text("Perihal", 20, yPos);
             pdf.text(": " + (surat?.penerima || "-"), 60, yPos);
             yPos += 8;
-    
+
             // Tujuan
             pdf.text("Tujuan", 20, yPos);
             pdf.text(": " + (surat?.pengirim || "-"), 60, yPos);
             yPos += 16;
-    
+
             // For the HTML content including tables, we'll render it to a canvas first
             if (surat?.isi_surat) {
                 // Create a temporary div to render the HTML content
@@ -370,49 +403,49 @@ const DetailSuratKeluar = () => {
                 tempDiv.style.left = '-9999px';
                 tempDiv.innerHTML = processHtmlContent(surat.isi_surat);
                 document.body.appendChild(tempDiv);
-    
+
                 // Use html2canvas to capture the rendered HTML
                 const canvas = await html2canvas(tempDiv, {
                     scale: 2,
                     logging: false,
                     backgroundColor: '#ffffff'
                 });
-                
+
                 // Remove the temporary div
                 document.body.removeChild(tempDiv);
-    
+
                 // Add the content image to the PDF
                 const imgData = canvas.toDataURL('image/jpeg', 1.0);
                 const contentWidth = 170; // mm
                 const contentHeight = canvas.height * contentWidth / canvas.width;
-                
+
                 // Check if we need a new page for the content
                 if (yPos + contentHeight > 270) {
                     pdf.addPage();
                     yPos = 20;
                 }
-                
+
                 pdf.addImage(imgData, 'JPEG', 20, yPos, contentWidth, contentHeight);
                 yPos += contentHeight + 10;
             }
-            
+
             // Check if we need a new page for the signature
             if (yPos + 40 > 270) {
                 pdf.addPage();
                 yPos = 20;
             }
-    
+
             // Add footer (date and signature)
             pdf.text((surat?.tempat_surat || 'Jakarta') + ', ' + formatDate(surat?.tanggal || ""), 140, yPos);
             yPos += 30; // Space for signature
-    
+
             // Add signature name
             pdf.text(surat?.jabatan_pengirim || '', 140, yPos);
             yPos += 8;
-    
+
             // Add signature status
             pdf.text('(' + (surat?.sifat_surat || '') + ')', 140, yPos);
-    
+
             // Save the PDF
             pdf.save(`surat-keluar-${surat?.surat_nomor}.pdf`);
         } catch (error) {
@@ -421,6 +454,7 @@ const DetailSuratKeluar = () => {
         }
         setLoading(false);
     };
+
     const PDFContent = () => (
         <div ref={pdfContentRef} className="w-full max-w-[210mm] min-h-[297mm] bg-white mx-auto p-12">
             {/* Header */}
@@ -489,28 +523,36 @@ const DetailSuratKeluar = () => {
             </div>
         </div>
     );
+
     if (isLoading) {
         return (
-            <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50">
-                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
-                <p className="mt-4 text-gray-600">Memuat data surat...</p>
+            <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-br from-indigo-50 to-blue-50">
+                <div className="relative w-24 h-24">
+                    <div className="absolute inset-0 border-4 border-t-indigo-600 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+                    <div className="absolute inset-2 border-4 border-t-transparent border-r-indigo-400 border-b-transparent border-l-transparent rounded-full animate-spin animation-delay-150"></div>
+                    <div className="absolute inset-4 border-4 border-t-transparent border-r-transparent border-b-indigo-200 border-l-transparent rounded-full animate-spin animation-delay-300"></div>
+                </div>
+                <p className="mt-6 text-indigo-800 font-medium animate-pulse">Memuat data surat...</p>
             </div>
         );
     }
 
     if (error || !surat) {
         return (
-            <div className="min-h-screen flex justify-center items-center bg-gray-50">
-                <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
-                    <div className="flex items-center mb-4 text-red-500">
-                        <X className="h-8 w-8 mr-2" />
-                        <h2 className="text-xl font-bold">Gagal mengambil data surat</h2>
+            <div className="min-h-screen flex justify-center items-center bg-gradient-to-br from-indigo-50 to-blue-50">
+                <div className="bg-white p-8 rounded-xl shadow-xl max-w-md w-full transform transition-all hover:scale-105 duration-300">
+                    <div className="flex items-center mb-6 text-red-500">
+                        <div className="bg-red-50 p-3 rounded-full mr-4">
+                            <X className="h-8 w-8" />
+                        </div>
+                        <h2 className="text-xl font-bold text-gray-800">Gagal mengambil data surat</h2>
                     </div>
-                    <p className="text-gray-600">{error || "Data tidak ditemukan"}</p>
+                    <p className="text-gray-600 mb-6 border-l-4 border-red-300 pl-3">{error || "Data tidak ditemukan"}</p>
                     <button
                         onClick={() => navigate('/dashboard/surat-keluar')}
-                        className="mt-6 w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded transition-all"
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-4 rounded-lg transition-all duration-300 shadow-md flex items-center justify-center font-medium"
                     >
+                        <ArrowLeft className="h-5 w-5 mr-2" />
                         Kembali ke daftar surat
                     </button>
                 </div>
@@ -521,219 +563,262 @@ const DetailSuratKeluar = () => {
     const viewUrl = filename ? generateViewUrl(filename) : null;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 md:p-8">
-            <div className="max-w-5xl mx-auto">
-                {/* Back button */}
-                <button
-                    onClick={() => navigate('/dashboard/surat-keluar')}
-                    className="mb-6 flex items-center text-blue-600 hover:text-blue-800 transition-colors"
-                >
-                    <ArrowLeftOutlined className="mr-2" />
-                    <span>Kembali ke daftar surat</span>
-                </button>
+        <div className={`min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-indigo-50 to-blue-50'} p-4 md:p-8 transition-all duration-500`}>
+            <div className="max-w-6xl mx-auto">
+                {/* Top Navigation */}
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                    <button
+                        onClick={() => navigate('/dashboard/surat-keluar')}
+                        className={`flex items-center ${darkMode ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-800'} transition-colors`}
+                    >
+                        <ArrowLeft className="mr-2 h-5 w-5" />
+                        <span>Kembali ke daftar surat</span>
+                    </button>
 
-                {/* Main card */}
-                <div className="bg-white rounded-xl shadow-xl overflow-hidden mb-8">
+                    <div className="flex items-center gap-3">
+                        <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Mode Tampilan:
+                        </span>
+                        <button
+                            onClick={() => setDarkMode(!darkMode)}
+                            className={`px-3 py-1 rounded-full text-sm ${darkMode
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-white text-indigo-600 border border-indigo-200 shadow-sm'}`}
+                        >
+                            {darkMode ? 'Mode Terang' : 'Mode Gelap'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Main Container */}
+                <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-xl overflow-hidden transition-all duration-500 transform hover:shadow-2xl`}>
                     {/* Header with ribbon */}
-                    <div className="relative bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
+                    <div className="relative bg-gradient-to-r from-indigo-600 to-indigo-800 text-white p-8">
                         <div className="absolute top-0 right-0 bg-yellow-500 text-xs font-bold uppercase px-3 py-1 rounded-bl-lg">
                             Surat Keluar
                         </div>
-                        <h1 className="text-3xl font-bold flex items-center justify-center">
-                            <FileText className="mr-3 h-8 w-8" />
-                            Detail Surat Keluar
-                        </h1>
-                        <div className="mt-2 text-center opacity-80">
-                            Surat Nomor: {surat.surat_nomor}
-                        </div>
-                    </div>
 
-                    {/* Content */}
-                    <div className="p-6">
-                        <div className="grid md:grid-cols-2 gap-4 mb-6">
-                            <DetailItem
-                                icon={<Hash className="h-5 w-5" />}
-                                label="Nomor Surat"
-                                value={surat.surat_nomor}
-                            />
-
-                            <DetailItem
-                                icon={<Calendar className="h-5 w-5" />}
-                                label="Tanggal"
-                                value={formatDate(surat.tanggal)}
-                            />
-
-                            <DetailItem
-                                icon={<Mail className="h-5 w-5" />}
-                                label="Perihal"
-                                value={surat.penerima}
-                            />
-
-                            <DetailItem
-                                icon={<Target className="h-5 w-5" />}
-                                label="Tujuan"
-                                value={surat.pengirim}
-                            />
-
-                            <DetailItem
-                                icon={<User className="h-5 w-5" />}
-                                label="Jabatan Pengirim"
-                                value={surat.jabatan_pengirim}
-                            />
-
-                            <DetailItem
-                                icon={<User className="h-5 w-5" />}
-                                label="Penerima"
-                                value={surat.sifat_surat}
-                            />
-                        </div>
-
-                        {/* Document preview if available */}
-                        {viewUrl && (
-                            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                                <h3 className="text-lg font-semibold mb-3 flex items-center">
-                                    <Eye className="mr-2 h-5 w-5 text-blue-500" />
-                                    Preview Dokumen
-                                </h3>
-                                <div className="h-48 bg-gray-100 flex items-center justify-center rounded-lg overflow-hidden cursor-pointer" onClick={() => setIsModalOpen(true)}>
-                                    {isPDF ? (
-                                        <div className="flex flex-col items-center text-gray-500">
-                                            <FilePdfFilled style={{ fontSize: '48px', color: '#e53e3e' }} />
-                                            <p className="mt-2">Klik untuk membuka dokumen PDF</p>
-                                        </div>
-                                    ) : (
-                                        <img
-                                            src={viewUrl}
-                                            alt="Document Preview"
-                                            className="h-full object-contain opacity-80 hover:opacity-100 transition-opacity"
-                                        />
-                                    )}
-                                </div>
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                            <div className="flex-1">
+                                <h1 className="text-3xl font-bold flex items-center mb-2">
+                                    <FileText className="mr-3 h-8 w-8" />
+                                    Detail Surat Keluar
+                                </h1>
+                                <p className="text-indigo-200 text-lg">
+                                    {surat.surat_nomor}
+                                </p>
                             </div>
-                        )}
 
-                        {/* Action buttons */}
-                        <div className="mt-8 flex flex-wrap justify-center gap-4">
-                            {viewUrl ? (
-                                <>
-                                    <button
-                                        onClick={() => setIsModalOpen(true)}
-                                        className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                                    >
-                                        <Eye className="mr-2 h-5 w-5" />
-                                        Lihat Dokumen
-                                    </button>
+                            <div className="mt-4 md:mt-0 flex gap-2 flex-wrap">
+                                <span className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-800 text-indigo-100 text-sm">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    {formatDate(surat.tanggal)}
+                                </span>
+                                <span className="inline-flex items-center px-3 py-1 rounded-full bg-green-600 text-white text-sm">
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Terverifikasi
+                                </span>
+                            </div>
+                        </div>
 
-                                    <a
-                                        href={viewUrl}
-                                        target="_blank"
-                                        className="flex items-center px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
-                                    >
-                                        <Download className="mr-2 h-5 w-5" />
-                                        Download
-                                    </a>
-                                </>
-                            ) : (
-                                <div className="px-4 py-3 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-700 rounded">
-                                    Tidak ada dokumen tersedia
-                                </div>
+                        {/* Tab navigation */}
+                        <div className="flex flex-wrap gap-2 mt-6 border-b border-indigo-500">
+                            <button
+                                onClick={() => setActivePage("details")}
+                                className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-all ${activePage === "details"
+                                        ? "bg-white text-indigo-600 shadow-lg"
+                                        : "text-indigo-200 hover:text-white hover:bg-indigo-700"
+                                    }`}
+                            >
+                                Detail Surat
+                            </button>
+
+                            {viewUrl && (
+                                <button
+                                    onClick={() => setActivePage("document")}
+                                    className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-all ${activePage === "document"
+                                            ? "bg-white text-indigo-600 shadow-lg"
+                                            : "text-indigo-200 hover:text-white hover:bg-indigo-700"
+                                        }`}
+                                >
+                                    Dokumen
+                                </button>
                             )}
 
                             <button
-                                onClick={() => setIsPDFPreviewOpen(true)}
-                                className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                                onClick={() => setActivePage("generate")}
+                                className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-all ${activePage === "generate"
+                                        ? "bg-white text-indigo-600 shadow-lg"
+                                        : "text-indigo-200 hover:text-white hover:bg-indigo-700"
+                                    }`}
                             >
-                                <FilePdfFilled className="mr-2" />
                                 Generate PDF
                             </button>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            {/* Document Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-75 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg w-full max-w-6xl max-h-[90vh] flex flex-col">
-                        <div className="flex items-center justify-between p-4 border-b">
-                            <h2 className="text-xl font-bold flex items-center">
-                                <FileText className="mr-2 h-5 w-5 text-blue-500" />
-                                Dokumen Surat
-                            </h2>
-                            <button
-                                onClick={() => setIsModalOpen(false)}
-                                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                            >
-                                <X className="h-6 w-6" />
-                            </button>
-                        </div>
+                    {/* Content */}
+                    <div className={`p-6 ${darkMode ? 'bg-gray-800' : 'bg-white'} transition-all duration-500`}>
+                        {/* Details Page */}
+                        {activePage === "details" && (
+                            <>
+                                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-xl mb-6 flex items-center">
+                                    <Info className="h-5 w-5 text-indigo-600 mr-3 flex-shrink-0" />
+                                    <p className="text-gray-700 text-sm">
+                                        Berikut adalah detail lengkap surat keluar. Gunakan tab navigasi di atas untuk melihat dokumen atau membuat PDF.
+                                    </p>
+                                </div>
 
-                        <div className="flex-1 p-4 overflow-auto">
-                            {viewUrl ? (
-                                isPDF && filename ? (
+                                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                                    <DetailItem
+                                        icon={<Hash className="h-5 w-5" />}
+                                        label="Nomor Surat"
+                                        value={surat.surat_nomor}
+                                    />
+
+                                    <DetailItem
+                                        icon={<Calendar className="h-5 w-5" />}
+                                        label="Tanggal Surat"
+                                        value={formatDate(surat.tanggal)}
+                                    />
+
+                                    <DetailItem
+                                        icon={<Target className="h-5 w-5" />}
+                                        label="Sifat Surat"
+                                        value={surat.sifat_surat}
+                                    />
+
+                                    <DetailItem
+                                        icon={<User className="h-5 w-5" />}
+                                        label="Pengirim"
+                                        value={surat.pengirim}
+                                    />
+
+                                    <DetailItem
+                                        icon={<Mail className="h-5 w-5" />}
+                                        label="Penerima"
+                                        value={surat.penerima}
+                                    />
+
+                                    <DetailItem
+                                        icon={<User className="h-5 w-5" />}
+                                        label="Jabatan Pengirim"
+                                        value={surat.jabatan_pengirim}
+                                    />
+                                </div>
+
+                                <div className={`mt-8 p-6 rounded-xl ${darkMode ? 'bg-gray-700' : 'bg-gray-50'} transition-all duration-300`}>
+                                    <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-800'} flex items-center`}>
+                                        <FileText className="h-5 w-5 mr-2 text-indigo-600" />
+                                        Isi Surat
+                                    </h2>
+                                    <div
+                                        className={`prose max-w-none ${darkMode ? 'prose-invert' : ''} prose-headings:font-bold prose-headings:text-indigo-600 prose-p:text-justify`}
+                                        dangerouslySetInnerHTML={{
+                                            __html: surat.isi_surat
+                                                ? processHtmlContent(surat.isi_surat)
+                                                : '<p class="text-gray-500 italic">Tidak ada isi surat</p>'
+                                        }}
+                                    ></div>
+                                </div>
+
+                                {surat.gambar && (
+                                    <div className={`mt-6 p-6 rounded-xl ${darkMode ? 'bg-gray-700' : 'bg-gray-50'} transition-all duration-300`}>
+                                        <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-800'} flex items-center`}>
+                                            <FilePdfFilled className="mr-2 text-indigo-600" />
+                                            Gambar Terkait
+                                        </h2>
+                                        <div className="flex justify-center">
+                                            <img
+                                                src={surat.gambar}
+                                                alt={surat.keterangan_gambar || "Dokumen terkait"}
+                                                className="max-h-64 object-contain border border-gray-200 p-2 rounded-lg shadow-sm"
+                                            />
+                                        </div>
+                                        {surat.keterangan_gambar && (
+                                            <p className={`text-center mt-3 ${darkMode ? 'text-gray-300' : 'text-gray-600'} text-sm italic`}>
+                                                {surat.keterangan_gambar}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {/* Document Page */}
+                        {activePage === "document" && viewUrl && (
+                            <div className="space-y-4">
+                                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-xl mb-6 flex items-center">
+                                    <Info className="h-5 w-5 text-indigo-600 mr-3 flex-shrink-0" />
+                                    <p className="text-gray-700 text-sm">
+                                        Berikut adalah dokumen asli yang diunggah untuk surat keluar ini.
+                                    </p>
+                                </div>
+
+                                {filename && isPDF ? (
                                     <PDFPreview filename={filename} />
                                 ) : (
-                                    <div className="bg-gray-100 p-4 rounded-lg flex justify-center">
-                                        <img
-                                            src={viewUrl}
-                                            alt="Scan Surat"
-                                            className="max-h-[70vh] object-contain shadow-lg rounded-lg"
-                                        />
+                                    <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-4xl mx-auto">
+                                        <div className="flex justify-center items-center h-60 border-2 border-dashed border-gray-200 rounded-xl">
+                                            <div className="text-center p-5">
+                                                <FilePdfFilled className="text-5xl text-indigo-600 mx-auto mb-4" />
+                                                <h3 className="text-lg font-semibold text-gray-800">Dokumen tidak dapat ditampilkan</h3>
+                                                <p className="text-gray-500 mt-2">Format file tidak didukung untuk pratinjau.</p>
+                                                {viewUrl && (
+                                                    <a
+                                                        href={viewUrl}
+                                                        target="_blank"
+                                                        className="mt-4 inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-all duration-300 shadow-md"
+                                                    >
+                                                        <Download className="mr-2 h-4 w-4" />
+                                                        Download Dokumen
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                )
-                            ) : (
-                                <div className="p-4 bg-red-50 border-l-4 border-red-500 text-red-700">
-                                    Tidak ada dokumen tersedia
+                                )}
+                            </div>
+                        )}
+
+                        {/* Generate PDF Page */}
+                        {activePage === "generate" && (
+                            <div className="space-y-6">
+                                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-xl mb-6 flex items-center">
+                                    <Info className="h-5 w-5 text-indigo-600 mr-3 flex-shrink-0" />
+                                    <p className="text-gray-700 text-sm">
+                                        Anda dapat membuat atau mencetak PDF dari surat keluar ini. Pratinjau dokumen akan ditampilkan di bawah.
+                                    </p>
                                 </div>
-                            )}
-                        </div>
+
+                                <div className="flex items-center justify-center mb-6">
+                                    <button
+                                        onClick={handleDownload}
+                                        disabled={loading}
+                                        className={`px-6 py-3 rounded-lg bg-indigo-600 text-white shadow-md hover:bg-indigo-700 transition-all duration-300 flex items-center ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-3"></div>
+                                                Membuat PDF...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Download className="mr-2 h-5 w-5" />
+                                                Download PDF
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+
+                                <div className={`border-2 border-dashed ${darkMode ? 'border-gray-700' : 'border-gray-200'} rounded-xl overflow-hidden transition-all duration-300`}>
+                                    <PDFContent />
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
-            )}
-
-            {/* PDF Preview Modal with transparent background */}
-            {isPDFPreviewOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-blur bg-opacity-50" onClick={() => setIsPDFPreviewOpen(false)}></div>
-                    <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col relative z-10">
-                        <div className="flex items-center justify-between p-4 border-b">
-                            <h2 className="text-xl font-bold flex items-center">
-                                <FilePdfFilled className="mr-2" style={{ color: '#e53e3e' }} />
-                                Preview PDF
-                            </h2>
-                            <button
-                                onClick={() => setIsPDFPreviewOpen(false)}
-                                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                            >
-                                <X className="h-6 w-6" />
-                            </button>
-                        </div>
-
-                        <div className="flex-1 p-4 overflow-auto bg-white">
-                            <PDFContent />
-                        </div>
-
-                        <div className="p-4 border-t bg-gray-50 flex justify-end space-x-3">
-                            <button
-                                onClick={() => window.print()}
-                                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded flex items-center transition-colors"
-                            >
-                                <Printer className="mr-2 h-4 w-4" />
-                                Cetak
-                            </button>
-
-                            <button
-                                onClick={handleDownload}
-                                disabled={loading}
-                                className={`px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded flex items-center transition-colors ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
-                            >
-                                <Download className="mr-2 h-4 w-4" />
-                                {loading ? 'Processing...' : 'Download PDF'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            </div>
         </div>
     );
 };
