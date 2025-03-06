@@ -19,7 +19,11 @@ import {
     Select,
     Divider,
     Tag,
-    Badge
+    Badge,
+    Empty,
+    Tabs,
+    Avatar,
+    Spin
 } from 'antd';
 import {
     PlusOutlined,
@@ -181,46 +185,65 @@ export const NotulenForm: React.FC<FormProps> = ({
     }, [BASE_URL]);
 
 
+
     useEffect(() => {
         if (visible) {
+            console.log('Modal opened, fetching users...');
             fetchUsers();
+
             form.resetFields();
 
             if (initialValues) {
-                console.log('Modal opened, fetching users...');
-                fetchUsers();
+                // Format tanggal dari tanggal_rapat ke field tanggal
+                const formattedValues = {
+                    ...initialValues,
+                    // Konversi tanggal_rapat ke field tanggal dengan format yang sesuai
+                    tanggal: initialValues.tanggal_rapat ? dayjs(initialValues.tanggal_rapat) : null
+                };
 
-                form.resetFields();
+                // Hapus field tanggal karena kita hanya menggunakan field tanggal
+                // delete formattedValues.tanggal;
 
+                // Set nilai form dari data yang ada
+                form.setFieldsValue(formattedValues);
+
+                // Parsing dan penanganan peserta
                 if (initialValues.peserta) {
                     try {
                         const parsedParticipants = JSON.parse(initialValues.peserta);
+
                         if (Array.isArray(parsedParticipants)) {
+                            // Filter dan set pengguna terdaftar
                             const userIds = parsedParticipants
                                 .filter(p => typeof p === 'object' && p.type === 'registered')
                                 .map(p => typeof p === 'object' && p.id ? p.id : '');
 
                             setSelectedUsers(userIds.filter(id => id !== ''));
 
+                            // Filter dan set peserta kustom
                             const customParts = parsedParticipants
                                 .filter(p => typeof p === 'object' && p.type === 'custom')
                                 .map(p => typeof p === 'object' && p.name ? p.name : '');
 
                             setCustomParticipants(customParts.filter(name => name !== ''));
                         } else {
+                            // Fallback untuk format string biasa
                             setCustomParticipants(initialValues.peserta.split('\n').filter(p => p.trim()));
                         }
                     } catch (error) {
                         console.error('JSON Parsing Error:', error);
+                        // Fallback jika parsing gagal
                         setCustomParticipants(initialValues.peserta.split('\n').filter(p => p.trim()));
                     }
                 }
 
+                // Set file lampiran jika ada
                 if (initialValues.dokumen_lampiran) {
+                    const filename = initialValues.dokumen_lampiran.split('/').pop() || 'Dokumen Lampiran';
                     setFileList([
                         {
                             uid: '-1',
-                            name: 'Current File',
+                            name: filename,
                             status: 'done',
                             url: initialValues.dokumen_lampiran,
                             thumbUrl: initialValues.dokumen_lampiran
@@ -230,12 +253,15 @@ export const NotulenForm: React.FC<FormProps> = ({
                     setFileList([]);
                 }
             } else {
+                // Reset semua nilai jika tidak ada nilai awal
                 setSelectedUsers([]);
                 setCustomParticipants([]);
                 setFileList([]);
             }
         }
     }, [visible, initialValues, form, fetchUsers]);
+
+
 
     const uploadProps: UploadProps = {
         name: "dokumen_lampiran",
@@ -286,24 +312,38 @@ export const NotulenForm: React.FC<FormProps> = ({
     const handleRemoveSelectedUser = (userId: string) => {
         setSelectedUsers(selectedUsers.filter(id => id !== userId));
     };
-
     const handleSubmit = (values: any) => {
         const formData = new FormData();
 
+        // Format tanggal rapat sesuai kebutuhan backend
         const formattedValues = {
             ...values,
-            tanggal_rapat: values.tanggal_rapat ? values.tanggal_rapat.format('YYYY-MM-DDTHH:mm:ss.SSSZ') : ''
+            // Pastikan tanggal dikirim dalam format YYYY-MM-DD
+            tanggal: values.tanggal ? values.tanggal.format('YYYY-MM-DD') : ''
         }
+
+        // Jangan lagi menggunakan tanggal_rapat, gunakan tanggal saja sesuai schema validasi
+        // hapus tanggal_rapat jika ada
+        delete formattedValues.tanggal_rapat;
 
         // Create a structured participant list
         const participantsList = [
             // Add selected registered users
             ...selectedUsers.map(userId => {
                 const user = users.find(u => u.id === userId);
-                return { id: userId, name: user?.name, type: 'registered' };
+                return {
+                    id: userId,
+                    name: user?.name || 'Unknown User',
+                    type: 'registered',
+                    role: user?.role || '',
+                    email: user?.email || ''
+                };
             }),
             // Add custom participants
-            ...customParticipants.map(name => ({ name, type: 'custom' }))
+            ...customParticipants.map(name => ({
+                name,
+                type: 'custom'
+            }))
         ];
 
         // Create a formatted string for backward compatibility
@@ -324,9 +364,9 @@ export const NotulenForm: React.FC<FormProps> = ({
             }
         });
 
-        // Add participants data in two formats
-        formData.append('peserta', participantsText);
-        formData.append('peserta_list', JSON.stringify(participantsList));
+        // Add participants data
+        formData.append('peserta', JSON.stringify(participantsList));
+        formData.append('peserta_text', participantsText);
 
         // Add file if a new file has been selected
         if (fileList.length > 0 && fileList[0].originFileObj) {
@@ -336,7 +376,17 @@ export const NotulenForm: React.FC<FormProps> = ({
         // For edit mode, we need to handle whether a new file was selected
         if (isEdit) {
             formData.append('keep_existing_file', (!fileList.length || !fileList[0].originFileObj) ? 'true' : 'false');
+            if (initialValues && initialValues.id) {
+                formData.append('id', initialValues.id);
+            }
         }
+
+        console.log('Submitting form with data:', {
+            tanggal: formattedValues.tanggal,
+            selectedUsers,
+            customParticipants,
+            fileChanged: (fileList.length > 0 && fileList[0].originFileObj) ? true : false
+        });
 
         onSubmit(formData);
     };
@@ -393,9 +443,10 @@ export const NotulenForm: React.FC<FormProps> = ({
                     <DatePicker
                         style={{ width: '100%' }}
                         placeholder="Pilih tanggal rapat"
-                        format="DD-MM-YYYY"
+                        format="DD/MM/YYYY"
                     />
                 </Form.Item>
+
 
                 <Form.Item
                     name="lokasi"
@@ -413,112 +464,152 @@ export const NotulenForm: React.FC<FormProps> = ({
                     <Input placeholder="Masukkan nama pemimpin rapat" />
                 </Form.Item>
 
-                {/* Participants Section */}
-                <Divider orientation="left">Peserta Rapat</Divider>
-
-                <Form.Item
-                    label="Pilih dari Pengguna Terdaftar"
-                    help="Pilih satu atau lebih peserta dari pengguna yang terdaftar"
-                >
-                    <Select
-                        mode="multiple"
-                        placeholder={loading ? "Memuat data pengguna..." : "Pilih peserta"}
-                        loading={loading}
-                        style={{ width: '100%' }}
-                        allowClear
-                        value={selectedUsers}
-                        onChange={(values) => setSelectedUsers(values)}
-                        optionFilterProp="children"
-                        notFoundContent={loading ? "Memuat data..." : "Tidak ada data pengguna"}
-                    >
-                        {Array.isArray(users) && users.length > 0 ? (
-                            users.map(user => (
-                                <Option key={user.id} value={user.id}>
-                                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                                        <UserOutlined style={{ marginRight: 8 }} />
-                                        <span>{user.name}</span>
-                                        {user.role && <Text type="secondary" style={{ marginLeft: 8 }}>({user.role})</Text>}
-                                    </div>
-                                </Option>
-                            ))
-                        ) : (
-                            <Option disabled value="">Tidak ada pengguna tersedia</Option>
-                        )}
-                    </Select>
-                    {users.length === 0 && !loading && (
-                        <Alert
-                            message="Tidak ada data pengguna"
-                            description="Tidak dapat memuat data pengguna. Pastikan Anda memiliki koneksi internet yang stabil dan API berfungsi dengan baik."
-                            type="warning"
-                            showIcon
-                            style={{ marginTop: 8 }}
-                        />
-                    )}
-                </Form.Item>
-
-                {/* Display selected users as Tags */}
-                {selectedUsers.length > 0 && (
-                    <div style={{ marginBottom: 16 }}>
-                        <Text strong>Pengguna yang dipilih:</Text>
-                        <div style={{ marginTop: 8 }}>
-                            {selectedUsers.map(userId => {
-                                const user = users.find(u => u.id === userId);
-                                return (
-                                    <Tag
-                                        key={userId}
-                                        closable
-                                        onClose={() => handleRemoveSelectedUser(userId)}
-                                        style={{ marginBottom: 8 }}
-                                        color="blue"
-                                    >
-                                        <UserOutlined style={{ marginRight: 4 }} />
-                                        {user?.name || 'Unknown User'}
-                                    </Tag>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-
-                <Form.Item
-                    label="Tambah Peserta Lainnya"
-                    help="Tambahkan peserta yang tidak terdaftar dalam sistem"
-                >
-                    <Space style={{ display: 'flex', marginBottom: 8 }}>
-                        <Input
-                            placeholder="Nama peserta"
-                            value={customParticipantInput}
-                            onChange={e => setCustomParticipantInput(e.target.value)}
-                            onPressEnter={handleAddCustomParticipant}
-                        />
-                        <Button
-                            type="primary"
-                            icon={<PlusOutlined />}
-                            onClick={handleAddCustomParticipant}
-                        >
-                            Tambah
-                        </Button>
+                <Divider orientation="left">
+                    <Space>
+                        <UserOutlined />
+                        <span>Peserta Rapat</span>
                     </Space>
+                </Divider>
 
-                    {customParticipants.length > 0 && (
-                        <div style={{ marginTop: 8 }}>
-                            <Text strong>Peserta tambahan:</Text>
-                            <div style={{ marginTop: 8 }}>
-                                {customParticipants.map((participant, index) => (
-                                    <Tag
-                                        key={index}
-                                        closable
-                                        onClose={() => handleRemoveCustomParticipant(participant)}
-                                        style={{ marginBottom: 8 }}
-                                        color="green"
+                <Card className="participants-card" bordered={false} style={{ marginBottom: 16, background: '#f9f9f9' }}>
+                    <Tabs defaultActiveKey="registered" style={{ marginBottom: 16 }}>
+                        <Tabs.TabPane
+                            tab={<span><UserOutlined /> Pengguna Terdaftar</span>}
+                            key="registered"
+                        >
+                            <Form.Item
+                                label="Pilih dari Pengguna Terdaftar"
+                                help="Pilih satu atau lebih peserta dari pengguna yang terdaftar"
+                            >
+                                <Select
+                                    mode="multiple"
+                                    placeholder={loading ? "Memuat data pengguna..." : "Pilih peserta"}
+                                    loading={loading}
+                                    style={{ width: '100%' }}
+                                    allowClear
+                                    value={selectedUsers}
+                                    onChange={(values) => setSelectedUsers(values)}
+                                    optionFilterProp="label"
+                                    showSearch
+                                    notFoundContent={loading ? <div style={{ padding: '8px', textAlign: 'center' }}><Spin size="small" /> Memuat data...</div> : "Tidak ada data pengguna"}
+                                    options={users.map(user => ({
+                                        label: (
+                                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                <Avatar
+                                                    icon={<UserOutlined />}
+                                                    size="small"
+                                                    style={{ marginRight: 8, backgroundColor: '#1890ff' }}
+                                                />
+                                                <span>{user.name}</span>
+                                                {user.role && <Tag color="blue" style={{ marginLeft: 8 }}>{user.role}</Tag>}
+                                            </div>
+                                        ),
+                                        value: user.id
+                                    }))}
+                                />
+
+                                {users.length === 0 && !loading && (
+                                    <Alert
+                                        message="Tidak ada data pengguna"
+                                        description="Tidak dapat memuat data pengguna. Pastikan Anda memiliki koneksi internet yang stabil dan API berfungsi dengan baik."
+                                        type="warning"
+                                        showIcon
+                                        style={{ marginTop: 8 }}
+                                    />
+                                )}
+                            </Form.Item>
+
+                            {/* Display selected users as Tags */}
+                            {selectedUsers.length > 0 && (
+                                <div style={{ marginBottom: 16 }}>
+                                    <Text strong>Pengguna yang dipilih:</Text>
+                                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                        {selectedUsers.map(userId => {
+                                            const user = users.find(u => u.id === userId);
+                                            return (
+                                                <Tag
+                                                    key={userId}
+                                                    closable
+                                                    onClose={() => handleRemoveSelectedUser(userId)}
+                                                    color="blue"
+                                                    style={{ display: 'flex', alignItems: 'center', padding: '4px 8px' }}
+                                                >
+                                                    <Avatar
+                                                        size="small"
+                                                        icon={<UserOutlined />}
+                                                        style={{ marginRight: 4 }}
+                                                    />
+                                                    {user?.name || 'Unknown User'}
+                                                </Tag>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </Tabs.TabPane>
+
+                        <Tabs.TabPane
+                            tab={<span><PlusOutlined /> Peserta Lainnya</span>}
+                            key="others"
+                        >
+                            <Form.Item
+                                label="Tambah Peserta Lainnya"
+                                help="Tambahkan peserta yang tidak terdaftar dalam sistem"
+                            >
+                                <Space.Compact style={{ display: 'flex', width: '100%', marginBottom: 8 }}>
+                                    <Input
+                                        placeholder="Nama peserta"
+                                        value={customParticipantInput}
+                                        onChange={e => setCustomParticipantInput(e.target.value)}
+                                        onPressEnter={handleAddCustomParticipant}
+                                        suffix={
+                                            customParticipantInput ? (
+                                                <CloseOutlined
+                                                    style={{ cursor: 'pointer', color: '#999' }}
+                                                    onClick={() => setCustomParticipantInput('')}
+                                                />
+                                            ) : null
+                                        }
+                                    />
+                                    <Button
+                                        type="primary"
+                                        icon={<PlusOutlined />}
+                                        onClick={handleAddCustomParticipant}
                                     >
-                                        {participant}
-                                    </Tag>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </Form.Item>
+                                        Tambah
+                                    </Button>
+                                </Space.Compact>
+
+                                {customParticipants.length > 0 && (
+                                    <div style={{ marginTop: 16 }}>
+                                        <Text strong>Peserta tambahan:</Text>
+                                        <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                            {customParticipants.map((participant, index) => (
+                                                <Tag
+                                                    key={index}
+                                                    closable
+                                                    onClose={() => handleRemoveCustomParticipant(participant)}
+                                                    color="green"
+                                                    style={{ display: 'flex', alignItems: 'center', padding: '4px 8px' }}
+                                                >
+                                                    <span>{participant}</span>
+                                                </Tag>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {customParticipants.length === 0 && (
+                                    <Empty
+                                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                        description="Belum ada peserta tambahan"
+                                        style={{ margin: '16px 0' }}
+                                    />
+                                )}
+                            </Form.Item>
+                        </Tabs.TabPane>
+                    </Tabs>
+                </Card>
 
                 <Form.Item
                     name="agenda"
@@ -545,6 +636,26 @@ export const NotulenForm: React.FC<FormProps> = ({
                     name="dokumen_lampiran"
                     label="Dokumen Lampiran"
                     rules={[{ required: !isEdit, message: 'Mohon unggah dokumen lampiran!' }]}
+                    extra={
+                        isEdit && fileList.length > 0 && fileList[0].url ?
+                            <Alert
+                                message="Dokumen Lampiran Tersedia"
+                                description={
+                                    <Space direction="vertical">
+                                        <Text>File saat ini: {fileList[0].name}</Text>
+                                        <Button
+                                            type="link"
+                                            icon={<EyeOutlined />}
+                                            onClick={() => window.open(fileList[0].url, '_blank')}
+                                        >
+                                            Lihat Dokumen
+                                        </Button>
+                                    </Space>
+                                }
+                                type="info"
+                                showIcon
+                            /> : null
+                    }
                 >
                     <Dragger {...uploadProps}>
                         <p className="ant-upload-drag-icon">
@@ -552,7 +663,7 @@ export const NotulenForm: React.FC<FormProps> = ({
                         </p>
                         <p className="ant-upload-text">
                             {fileList.length > 0 && fileList[0].url
-                                ? 'File saat ini: ' + fileList[0].name
+                                ? 'Ubah file dengan mengunggah file baru'
                                 : 'Klik atau seret file ke area ini untuk mengunggah'}
                         </p>
                         <p className="ant-upload-hint">
@@ -621,7 +732,7 @@ const EnhancedDeleteConfirmationModal: React.FC<EnhancedDeleteConfirmationModalP
                                 <Text type="secondary">
                                     {index + 1}. {item.judul}
                                     <Text type="secondary" className="ml-2">
-                                        ({new Date(item.tanggal_rapat).toLocaleDateString()})
+                                        ({new Date(item.tanggal).toLocaleDateString()})
                                     </Text>
                                 </Text>
                             </li>
@@ -819,16 +930,26 @@ export default function NotulenPage() {
 
     const handleEdit = async (record: NotulenType) => {
         try {
-            const currentNotulen = await fetchNotulenById(record.id);
-            if (currentNotulen) {
-                setCurrentRecord(currentNotulen as NotulenType);
+            // Cek apakah data notulen sudah ada dalam cache
+            const cachedNotulen = data.paginatedData.find((notulen) => notulen.id === record.id);
+
+            if (cachedNotulen) {
+                setCurrentRecord(cachedNotulen);
                 setIsEditModalVisible(true);
+            } else {
+                // Jika tidak ada di cache, ambil dari API
+                const fetchedNotulen = await fetchNotulenById(record.id);
+                if (fetchedNotulen) {
+                    setCurrentRecord(fetchedNotulen);
+                    setIsEditModalVisible(true);
+                }
             }
         } catch (err) {
             const error = err as Error;
             message.error('Gagal mengambil data notulen: ' + (error.message || 'Unknown error'));
         }
     };
+
 
     const handleViewDetail = (record: NotulenType) => {
         navigate(`/dashboard/notulen/${record.id}`);

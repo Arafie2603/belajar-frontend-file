@@ -44,28 +44,34 @@ export const useNotulenCache = (baseURL: string) => {
 
     const isFetchedRef = useRef(false);
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (forceRefresh = false) => {
         if (!token) return;
 
         setLoading(true);
         setError(null);
 
         try {
-            // Check localStorage first
-            const cachedData = localStorage.getItem('notulenData');
-            const cachedTimestamp = localStorage.getItem('notulenDataTimestamp');
+            // Skip cache if forceRefresh is true
+            if (!forceRefresh) {
+                // Check localStorage first
+                const cachedData = localStorage.getItem('notulenData');
+                const cachedTimestamp = localStorage.getItem('notulenDataTimestamp');
 
-            // Check if cached data exists and is less than 5 minutes old
-            if (cachedData && cachedTimestamp) {
-                const timeDiff = Date.now() - parseInt(cachedTimestamp);
-                if (timeDiff < 5 * 60 * 1000) { // 5 minutes
-                    setData(JSON.parse(cachedData));
-                    setLoading(false);
-                    return;
+                // Check if cached data exists and is less than 5 minutes old
+                if (cachedData && cachedTimestamp) {
+                    const timeDiff = Date.now() - parseInt(cachedTimestamp);
+                    if (timeDiff < 5 * 60 * 1000) { // 5 minutes
+                        setData(JSON.parse(cachedData));
+                        setLoading(false);
+                        return;
+                    }
                 }
             }
 
-            const response = await axios.get<NotulenResponse>(`${baseURL}api/notulen`, {
+            // Add cache busting parameter when forceRefresh is true
+            const url = `${baseURL}api/notulen${forceRefresh ? '?_t=' + Date.now() : ''}`;
+
+            const response = await axios.get<NotulenResponse>(url, {
                 headers: {
                     Authorization: `Bearer ${token}`
                 }
@@ -118,7 +124,7 @@ export const useNotulenCache = (baseURL: string) => {
         if (!token) return null;
 
         try {
-            const response = await axios.put(`${baseURL}api/notulen/${id}`, formData, {
+            const response = await axios.patch(`${baseURL}api/notulen/${id}`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                     Authorization: `Bearer ${token}`
@@ -164,7 +170,9 @@ export const useNotulenCache = (baseURL: string) => {
         deleteNotulen,
         refreshData: useCallback(() => {
             isFetchedRef.current = false;
-            fetchData();
+            localStorage.removeItem('notulenData'); // Clear cache
+            localStorage.removeItem('notulenDataTimestamp'); // Clear timestamp
+            fetchData(true); // Pass true to force refresh
         }, [fetchData]),
     };
 };
