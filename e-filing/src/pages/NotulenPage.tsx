@@ -17,7 +17,7 @@ import {
     Alert,
     DatePicker,
     Select,
-    Divider,
+    // Divider,
     Tag,
     Badge,
     Empty,
@@ -464,12 +464,12 @@ export const NotulenForm: React.FC<FormProps> = ({
                     <Input placeholder="Masukkan nama pemimpin rapat" />
                 </Form.Item>
 
-                <Divider orientation="left">
-                    <Space>
-                        <UserOutlined />
-                        <span>Peserta Rapat</span>
-                    </Space>
-                </Divider>
+                {/* <Divider orientation="start"> */}
+                <Space>
+                    <UserOutlined />
+                    <span>Peserta Rapat</span>
+                </Space>
+                {/* </Divider> */}
 
                 <Card className="participants-card" bordered={false} style={{ marginBottom: 16, background: '#f9f9f9' }}>
                     <Tabs defaultActiveKey="registered" style={{ marginBottom: 16 }}>
@@ -875,12 +875,12 @@ export default function NotulenPage() {
 
             if (successCount > 0) {
                 message.success(`Berhasil menghapus ${successCount} notulen`);
-                invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+                invalidateSpecificCache(CACHE_KEYS.NOTULEN);
 
                 invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
                 invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
 
-                eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+                eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
                 eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
             }
 
@@ -1284,16 +1284,12 @@ export default function NotulenPage() {
     ];
 
     const handleDeleteSingle = (record: NotulenType) => {
-        invalidateSpecificCache(CACHE_KEYS.NOTULEN);
+        console.log("Menghapus notulen dengan ID:", record.id);
 
-        invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
-        invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
-
-        eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
-        eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
         setSelectedRowKeys([record.id]);
         setIsDeleteModalVisible(true);
     };
+
 
 
     return (

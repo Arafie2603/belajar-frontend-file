@@ -15,13 +15,10 @@ import {
     Image,
     Timeline,
     Avatar,
-    Breadcrumb,
     Modal,
     Steps,
     Statistic,
     Badge,
-    Menu,
-    Dropdown,
     Tabs,
     Progress
 } from 'antd';
@@ -40,8 +37,6 @@ import {
     ShareAltOutlined,
     FileProtectOutlined,
     DownloadOutlined,
-    EllipsisOutlined,
-    MoreOutlined,
     CheckCircleOutlined,
     ClockCircleFilled,
     FileOutlined,
@@ -66,6 +61,13 @@ interface NotulenDetail {
     lokasi: string;
     pemimpin_rapat: string;
     peserta: string;
+    parsedPeserta?: Array<{
+        id?: string;
+        name: string;
+        type: string;
+        role?: string;
+        email?: string;
+    }>;
     agenda: string;
     dokumen_lampiran: string;
     status: string;
@@ -86,7 +88,10 @@ const getFileType = (url: string): 'pdf' | 'image' | 'document' | 'unknown' => {
     return 'unknown';
 };
 
+
 const getStatusColor = (status: string): string => {
+    if (!status) return 'default';
+
     const statusLower = status.toLowerCase();
     if (statusLower.includes('selesai') || statusLower.includes('approved')) return 'success';
     if (statusLower.includes('proses') || statusLower.includes('progress')) return 'processing';
@@ -95,7 +100,10 @@ const getStatusColor = (status: string): string => {
     return 'default';
 };
 
+
 const getStatusStep = (status: string): number => {
+    if (!status) return 0;
+
     const statusLower = status.toLowerCase();
     if (statusLower.includes('selesai') || statusLower.includes('approved')) return 3;
     if (statusLower.includes('proses') || statusLower.includes('progress')) return 1;
@@ -117,58 +125,80 @@ const DetailNotulen: React.FC = () => {
     const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://api-efiling.vercel.app/';
 
     const [loadingProgress, setLoadingProgress] = useState<number>(0);
+    const [dataReady, setDataReady] = useState<boolean>(false);
 
 
     useEffect(() => {
         const fetchNotulenDetail = async () => {
-            let loadingInterval: NodeJS.Timeout | undefined; 
-    
+            let loadingInterval: NodeJS.Timeout | undefined;
+
             try {
+                // Reset loading state
+                setLoadingProgress(0);
+                setDataReady(false);
+
+                // Mulai interval loading yang lebih lambat
                 loadingInterval = setInterval(() => {
                     setLoadingProgress(prev => {
-                        if (prev >= 90) {
-                            if (loadingInterval) clearInterval(loadingInterval);
-                            return prev;
+                        // Batasi progress maksimum ke 95% selama data masih diambil
+                        if (prev >= 95) {
+                            return 95;
                         }
-                        return prev + 10;
+                        return prev + 5; // Lebih lambat agar terlihat lebih natural
                     });
                 }, 300);
-    
+
                 const response = await axios.get(`${BASE_URL}api/notulen/${id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-    
-                setData(response.data.data);
-                setError(null);
-            } catch (err: unknown) {
-                if (axios.isAxiosError(err)) {
-                    setError(err.response?.data?.message || 'Failed to fetch notulen detail');
-                } else if (err instanceof Error) {
-                    setError(err.message);
+
+                const responseData = response.data.data;
+
+                if (responseData.peserta) {
+                    try {
+                        responseData.parsedPeserta = JSON.parse(responseData.peserta);
+                    } catch (parseErr) {
+                        console.error('Error parsing peserta:', parseErr);
+                        responseData.parsedPeserta = [];
+                    }
                 } else {
-                    setError('An unknown error occurred');
+                    responseData.parsedPeserta = [];
                 }
-            } finally {
-                if (loadingInterval) clearInterval(loadingInterval); 
-                setLoadingProgress(100); 
+
+                // Setelah data selesai dimuat, selesaikan loading
+                setData(responseData);
+                setError(null);
+
+                // Hentikan interval loading
+                if (loadingInterval) clearInterval(loadingInterval);
+
+                // Set loading ke 100% dan tunggu sebentar sebelum menampilkan halaman
+                setLoadingProgress(100);
+
+                // Tunggu 500ms setelah loading 100% sebelum menampilkan halaman
                 setTimeout(() => {
                     setLoading(false);
-                }, 500); 
+                    setDataReady(true);
+                }, 500);
+
+            } catch (err: unknown) {
+                console.error('Error fetching notulen details:', err);
+                setError(err instanceof Error ? err.message : 'Terjadi kesalahan saat memuat data');
+
+                // Hentikan interval loading
+                if (loadingInterval) clearInterval(loadingInterval);
+                setLoadingProgress(100);
+
+                setTimeout(() => {
+                    setLoading(false);
+                }, 500);
             }
         };
-    
+
         if (id && token) {
             fetchNotulenDetail();
         }
     }, [id, token, BASE_URL]);
-    
-    
-
-    const handleEdit = () => {
-        if (data) {
-            navigate(`/dashboard/notulen/edit/${data.id}`);
-        }
-    };
 
     const handlePrint = () => {
         window.print();
@@ -205,28 +235,12 @@ const DetailNotulen: React.FC = () => {
         }
     };
 
-    const actions = [
-        { label: 'Edit', icon: <EditOutlined />, onClick: handleEdit },
-        { label: 'Print', icon: <PrinterOutlined />, onClick: handlePrint },
-        { label: 'Share', icon: <ShareAltOutlined />, onClick: handleShare },
-        { label: 'Download', icon: <DownloadOutlined />, onClick: handleDownload },
-    ];
 
-    const actionMenu = (
-        <Menu>
-            {actions.map((action, index) => (
-                <Menu.Item key={index} icon={action.icon} onClick={action.onClick}>
-                    {action.label}
-                </Menu.Item>
-            ))}
-        </Menu>
-    );
-
-    if (loading) {
+    if (loading || !dataReady) {
         return (
             <div className="loading-screen" style={{
                 minHeight: '100vh',
-                backgroundColor: '#f7f9fc',
+                backgroundColor: '#fff',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
@@ -241,7 +255,7 @@ const DetailNotulen: React.FC = () => {
                     </Title>
 
                     <Progress
-                        percent={loadingProgress}
+                        percent={Math.round(loadingProgress)}
                         status="active"
                         strokeColor={{
                             '0%': '#108ee9',
@@ -257,7 +271,6 @@ const DetailNotulen: React.FC = () => {
             </div>
         );
     }
-
     if (error) {
         return (
             <Content style={{ margin: '24px' }}>
@@ -293,24 +306,31 @@ const DetailNotulen: React.FC = () => {
             </Content>
         );
     }
-
-    const fileType = getFileType(data.dokumen_lampiran);
     const formattedDate = dayjs(data.tanggal_rapat).format('dddd, D MMMM YYYY');
-    const participantsList = data.peserta.split('\n').filter(p => p.trim());
-    const agendaItems = data.agenda.split('\n').filter(a => a.trim());
-    const statusStep = getStatusStep(data.status);
+    const participantsList = data.peserta ? data.peserta.split('\n').filter(p => p.trim()) : [];
+    const agendaItems = data.agenda ? data.agenda.split('\n').filter(a => a.trim()) : [];
+    const statusStep = data.status ? getStatusStep(data.status) : 0;
+    const fileType = data?.dokumen_lampiran ? getFileType(data.dokumen_lampiran) : 'unknown';
 
     return (
         <Content className="site-layout-background" style={{ margin: '24px' }}>
-            {/* Breadcrumb Navigation */}
-            <Breadcrumb
-                style={{ marginBottom: '16px' }}
-                items={[
-                    { title: 'Dashboard' },
-                    { title: <a onClick={handleBack}>Notulen</a> },
-                    { title: 'Detail Notulen' }
-                ]}
-            />
+            <div style={{ marginBottom: '16px' }}>
+                <Button
+                    type="link"
+                    onClick={handleBack}
+                    style={{
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        fontSize: '14px',
+                        color: '#1677ff'
+                    }}
+                >
+                    <ArrowLeftOutlined style={{ marginRight: '8px' }} />
+                    Kembali ke Daftar Notulen
+                </Button>
+            </div>
+
 
             {/* Page Header */}
             <Card
@@ -327,7 +347,7 @@ const DetailNotulen: React.FC = () => {
                 <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} md={16}>
                         <div style={{ color: 'white' }}>
-                            <Badge.Ribbon text={data.status} color={getStatusColor(data.status)}>
+                            <Badge.Ribbon>
                                 <Title level={2} style={{ color: 'white', margin: '0 0 8px 0' }}>{data.judul}</Title>
                             </Badge.Ribbon>
                             <Space size="large" style={{ marginTop: '16px' }}>
@@ -336,19 +356,6 @@ const DetailNotulen: React.FC = () => {
                                 <Text style={{ color: 'rgba(255, 255, 255, 0.85)' }}><UserOutlined /> {data.pemimpin_rapat}</Text>
                             </Space>
                         </div>
-                    </Col>
-                    <Col xs={24} md={8} style={{ textAlign: 'right' }}>
-                        <Space wrap>
-                            <Button type="primary" ghost icon={<ArrowLeftOutlined />} onClick={handleBack}>
-                                Kembali
-                            </Button>
-                            <Button type="primary" ghost icon={<EditOutlined />} onClick={handleEdit}>
-                                Edit
-                            </Button>
-                            <Dropdown overlay={actionMenu} placement="bottomRight">
-                                <Button type="primary" ghost icon={<EllipsisOutlined />} />
-                            </Dropdown>
-                        </Space>
                     </Col>
                 </Row>
             </Card>
@@ -623,7 +630,7 @@ const DetailNotulen: React.FC = () => {
                                 </div>
 
                                 <Row gutter={[16, 16]}>
-                                    {participantsList.map((participant, index) => (
+                                    {data.parsedPeserta && data.parsedPeserta.map((participant, index) => (
                                         <Col xs={24} sm={12} md={8} lg={6} key={index}>
                                             <Card
                                                 hoverable
@@ -644,12 +651,14 @@ const DetailNotulen: React.FC = () => {
                                                             ][index % 10]
                                                         }}
                                                     >
-                                                        {participant.charAt(0).toUpperCase()}
+                                                        {participant.name.charAt(0).toUpperCase()}
                                                     </Avatar>
                                                     <div style={{ marginLeft: '12px' }}>
-                                                        <Text strong>{participant}</Text>
+                                                        <Text strong>{participant.name}</Text>
                                                         <div>
-                                                            <Text type="secondary" style={{ fontSize: '12px' }}>Peserta</Text>
+                                                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                                                                {participant.role || participant.type}
+                                                            </Text>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -745,14 +754,6 @@ const DetailNotulen: React.FC = () => {
                     <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
                         Kembali
                     </Button>
-                    <Button type="primary" icon={<EditOutlined />} onClick={handleEdit}>
-                        Edit Notulen
-                    </Button>
-                    <Dropdown overlay={actionMenu}>
-                        <Button icon={<MoreOutlined />}>
-                            Tindakan Lain
-                        </Button>
-                    </Dropdown>
                 </Space>
             </div>
 

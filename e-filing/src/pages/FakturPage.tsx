@@ -56,7 +56,6 @@ const { Title, Text, Paragraph } = Typography;
 const { Dragger } = Upload;
 const { TextArea } = Input;
 const { Option } = Select;
-const { confirm } = Modal;
 
 interface User {
     id: string;
@@ -297,6 +296,22 @@ const FakturForm: React.FC<FormProps> = ({
                 <Form.Item
                     name="bukti_pembayaran"
                     label="Bukti Pembayaran"
+                    rules={[
+                        {
+                            validator: (_, value) => {
+                                if (!value || value instanceof File) {
+                                    return Promise.resolve();
+                                }
+
+                                try {
+                                    new URL(value);
+                                    return Promise.resolve();
+                                } catch (e: any) {
+                                    return Promise.reject(`Format URL tidak valid ${e}`);
+                                }
+                            }
+                        }
+                    ]}
                 >
                     <Dragger {...uploadProps}>
                         <p className="ant-upload-drag-icon">
@@ -406,18 +421,24 @@ const Faktur: React.FC = () => {
     const [submitting, setSubmitting] = useState(false);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
     const [selectedItems, setSelectedItems] = useState<FakturType[]>([]);
-    const [deleteLoading, setDeleteLoading] = useState(false);
     const [filters, setFilters] = useState<Record<string, any>>({});
     const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://api-efiling.vercel.app/';
     const [currentPage, setCurrentPage] = useState(1);
     const navigate = useNavigate();
+    const [formValues, setFormValues] = useState<any>(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
+    const [deleteItemId] = useState<string>('');
+    const [isSingleDeleteModalVisible, setIsSingleDeleteModalVisible] = useState(false);
+    const [deleteItemToShow, setDeleteItemToShow] = useState<FakturType | null>(null);
+
+
+
 
     const {
         data,
         loading,
         error,
         fetchData,
-        fetchFakturById,
         updateFaktur,
         deleteFaktur,
         refreshData
@@ -443,82 +464,184 @@ const Faktur: React.FC = () => {
         };
     }, [refreshDataCallback]);
 
-    const handleEdit = async (record: FakturType) => {
-        try {
-            const currentFaktur = await fetchFakturById(record.id);
-            if (currentFaktur) {
-                setCurrentRecord(currentFaktur as FakturType);
-                setIsEditModalVisible(true);
-            }
-        } catch (err) {
-            const error = err as Error;
-            message.error('Gagal mengambil data faktur: ' + (error.message || 'Unknown error'));
-        }
-    };
+    // Fixed version with proper type handling
+    const handleEdit = (record: FakturType) => {
+        // Keep the original record for reference
+        setCurrentRecord(record);
 
+        // Create properly typed form values
+        setFormValues({
+            ...record,
+            tanggal: dayjs(record.tanggal)
+        });
+
+        setIsEditModalVisible(true);
+    };
     const handleViewDetail = async (record: FakturType) => {
         navigate(`/dashboard/faktur/${record.id}`);
     };
-
-    const handleDelete = async (id: string) => {
-        confirm({
-            title: 'Konfirmasi Penghapusan',
-            icon: <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />,
-            content: (
-                <div>
-                    <p>Apakah Anda yakin ingin menghapus faktur ini?</p>
-                    <Alert
-                        message="Peringatan: Tindakan ini tidak dapat dibatalkan"
-                        type="error"
-                        showIcon
-                        style={{ marginTop: '16px' }}
-                    />
-                </div>
-            ),
-            okText: 'Ya, Hapus',
-            okType: 'danger',
-            cancelText: 'Batal',
-            onOk: async () => {
-                try {
-                    await deleteFaktur(id);
-                    message.success('Faktur berhasil dihapus!');
-                    // No need to call refreshData here, it will be triggered by the event
-                } catch (err) {
-                    const error = err as Error;
-                    console.error('Error deleting faktur:', error);
-                    message.error(error.message || 'Gagal menghapus faktur!');
-                }
-            },
-        });
+    const handleDelete = async (faktur: FakturType) => {
+        setDeleteItemToShow(faktur);
+        setIsSingleDeleteModalVisible(true); 
     };
 
-    const handleMultipleDelete = async () => {
+    const handleConfirmSingleDelete = async () => {
         setDeleteLoading(true);
+        setIsDeleteModalVisible(true)
         try {
-            // Process deletions sequentially to ensure all are handled
-            for (const id of selectedRowKeys) {
-                await deleteFaktur(id.toString());
-            }
+            // Perform the delete operation
+            await deleteFaktur(deleteItemId);
 
-            message.success(`${selectedRowKeys.length} faktur berhasil dihapus!`);
+            // Close the modal
+            setIsSingleDeleteModalVisible(false);
+            setDeleteLoading(false);
+
+            // Show success message
+            message.success('Faktur berhasil dihapus!');
+
+            // Invalidate caches if needed
             invalidateSpecificCache(CACHE_KEYS.FAKTUR);
-
             invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
             invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
 
             eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
             eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
-            setSelectedRowKeys([]);
-            setSelectedItems([]);
-            setIsDeleteModalVisible(false);
-            // Refresh data will be triggered by event
         } catch (err) {
             const error = err as Error;
-            message.error('Gagal menghapus beberapa faktur: ' + (error.message || 'Unknown error'));
-        } finally {
+            console.error('Error deleting faktur:', error);
+
+            // Show error message
+            message.error(error.message || 'Gagal menghapus faktur!');
             setDeleteLoading(false);
         }
     };
+
+    const handleMultipleDelete = async () => {
+        setDeleteLoading(true);
+
+        try {
+            // Process deletions sequentially
+            let successCount = 0;
+            let failCount = 0;
+
+            for (let i = 0; i < selectedRowKeys.length; i++) {
+                const id = selectedRowKeys[i].toString();
+                try {
+                    await deleteFaktur(id);
+                    successCount++;
+                } catch (err) {
+                    failCount++;
+                    console.error(`Failed to delete faktur with id: ${id}`, err);
+                    // Continue with the next deletion even if this one failed
+                }
+            }
+
+            // Close modal first
+            setIsDeleteModalVisible(false);
+            setDeleteLoading(false);
+
+            // Show appropriate success/warning message
+            if (failCount === 0) {
+                message.success(`${successCount} faktur berhasil dihapus!`);
+            } else {
+                message.warning(
+                    `${successCount} faktur berhasil dihapus, ${failCount} faktur gagal dihapus.`
+                );
+            }
+
+            // Clear selections and invalidate caches
+            invalidateSpecificCache(CACHE_KEYS.FAKTUR);
+            invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+            invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+            eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
+            eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
+
+            setSelectedRowKeys([]);
+            setSelectedItems([]);
+        } catch (err) {
+            const error = err as Error;
+            message.error(error.message || 'Gagal menghapus faktur!');
+            setDeleteLoading(false);
+        }
+    };
+
+    // Jika Anda ingin menyertakan detail faktur, gunakan versi ini:
+    // Pastikan Anda meneruskan item yang akan dihapus
+    const SingleDeleteConfirmationModalWithItem: React.FC<{
+        visible: boolean;
+        onCancel: () => void;
+        onConfirm: () => void;
+        item: FakturType | null; // Teruskan item dari luar
+        loading: boolean;
+    }> = ({ visible, onCancel, onConfirm, item, loading }) => {
+        return (
+            <Modal
+                title={null}
+                open={visible}
+                footer={null}
+                onCancel={onCancel}
+                width={500}
+                className="delete-confirmation-modal"
+                closable={!loading}
+                maskClosable={!loading}
+            >
+                <Result
+                    status="warning"
+                    icon={<ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
+                    title="Konfirmasi Penghapusan"
+                    subTitle={
+                        <div>
+                            <Paragraph style={{ fontSize: '16px', marginBottom: '24px' }}>
+                                Apakah Anda yakin ingin menghapus faktur ini?
+                            </Paragraph>
+                            {item && (
+                                <div style={{
+                                    padding: '12px',
+                                    border: '1px solid #f0f0f0',
+                                    borderRadius: '4px',
+                                    backgroundColor: '#fafafa',
+                                    marginBottom: '24px'
+                                }}>
+                                    <div style={{
+                                        padding: '12px',
+                                        backgroundColor: 'white',
+                                        borderRadius: '4px',
+                                        border: '1px solid #f0f0f0'
+                                    }}>
+                                        <div><Text strong>{item.deskripsi}</Text></div>
+                                        <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                                            <CalendarOutlined style={{ marginRight: '4px' }} />
+                                            {dayjs(item.tanggal).format('DD MMM YYYY')} |
+                                            <DollarOutlined style={{ margin: '0 4px 0 8px' }} />
+                                            Rp {formatToIDR(item.jumlah_pengeluaran)}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            <Alert
+                                message="Peringatan: Tindakan ini tidak dapat dibatalkan"
+                                type="error"
+                                showIcon
+                                style={{ marginBottom: '24px' }}
+                            />
+                        </div>
+                    }
+                    extra={[
+                        <Flex gap="middle" justify="center" key="actions">
+                            <Button onClick={onCancel} disabled={loading}>
+                                Batal
+                            </Button>
+                            <Button danger type="primary" onClick={onConfirm} loading={loading}>
+                                Ya, Hapus
+                            </Button>
+                        </Flex>
+                    ]}
+                />
+            </Modal>
+        );
+    };
+
 
     const handleSubmit = async (formData: FormData) => {
         setSubmitting(true);
@@ -553,21 +676,44 @@ const Faktur: React.FC = () => {
         }
     };
 
+    // 1. Update the handleUpdate function to properly handle the bukti_pembayaran field
     const handleUpdate = async (formData: FormData) => {
         if (!currentRecord?.id) return;
 
         setSubmitting(true);
         try {
-            await updateFaktur(currentRecord.id, formData);
-            message.success('Faktur berhasil diperbarui!');
-            invalidateSpecificCache(CACHE_KEYS.NOTULEN);
+            // Check if bukti_pembayaran is a File or a string URL
+            const buktiValue = formData.get('bukti_pembayaran');
 
+            // If bukti_pembayaran is a string and not a file, and it hasn't changed, remove it from FormData
+            // to prevent validation errors
+            if (
+                typeof buktiValue === 'string' &&
+                buktiValue === currentRecord.bukti_pembayaran
+            ) {
+                formData.delete('bukti_pembayaran');
+            }
+
+            // If it's an empty string or not changed, also remove it
+            if (buktiValue === '' || buktiValue === null) {
+                formData.delete('bukti_pembayaran');
+            }
+
+            await updateFaktur(currentRecord.id, formData);
+
+            // First close the modal
+            setIsEditModalVisible(false);
+
+            // Then show success message
+            message.success('Faktur berhasil diperbarui!');
+
+            // Invalidate caches and emit events after modal is closed
+            invalidateSpecificCache(CACHE_KEYS.NOTULEN);
             invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
             invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
 
             eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
             eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
-            setIsEditModalVisible(false);
         } catch (err) {
             const error = err as Error;
             message.error(
@@ -1002,7 +1148,7 @@ const Faktur: React.FC = () => {
                         <Button
                             danger
                             icon={<DeleteOutlined />}
-                            onClick={() => handleDelete(record.id)}
+                            onClick={() => handleDelete(record)}
                             size="small"
                         />
                     </Tooltip>
@@ -1140,8 +1286,16 @@ const Faktur: React.FC = () => {
                 onCancel={() => setIsEditModalVisible(false)}
                 onSubmit={handleUpdate}
                 submitting={submitting}
-                initialValues={currentRecord}
+                initialValues={formValues}  // Use formValues instead of currentRecord
                 isEdit={true}
+            />
+
+            <SingleDeleteConfirmationModalWithItem
+                visible={isSingleDeleteModalVisible}
+                onCancel={() => setIsSingleDeleteModalVisible(false)}
+                onConfirm={handleConfirmSingleDelete}
+                item={deleteItemToShow}
+                loading={deleteLoading}
             />
 
             <DeleteConfirmationModal

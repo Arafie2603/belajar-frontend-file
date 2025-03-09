@@ -118,42 +118,69 @@ export const useFakturCache = (baseUrl: string) => {
 
     const updateFaktur = useCallback(async (id: string, formData: FormData) => {
         try {
-            await axios.put(`${baseUrl}api/faktur/${id}`, formData, {
+            // Log formData keys for debugging
+            console.log('FormData keys:', Array.from(formData.keys()));
+
+            const response = await axios.patch(`${baseUrl}api/faktur/${id}`, formData, {
                 headers: {
-                    ...getHeaders, // Perbaikan: Tidak memanggil sebagai fungsi
+                    ...getHeaders,
                     'Content-Type': 'multipart/form-data',
                 },
             });
 
-            storage.remove(CACHE_KEY);
+            const fakturCacheKeys = Object.keys(localStorage)
+                .filter(key => key.startsWith(CACHE_KEY));
+
+            fakturCacheKeys.forEach(key => storage.remove(key));
+
             eventBus.emit(DATA_EVENTS.FAKTUR_UPDATED);
             eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
 
-            await refreshData();
+            return response.data;
         } catch (err) {
             const error = err as any;
             console.error(`Error updating faktur with ID ${id}:`, error);
-            throw new Error(error.response?.data?.message || error.message || `Failed to update faktur with ID ${id}`);
+
+            if (error.response?.data?.message && typeof error.response.data.message === 'string') {
+                throw new Error(error.response.data.message);
+            } else if (error.response?.data?.error) {
+                throw new Error(error.response.data.error);
+            } else {
+                throw new Error(error.message || `Failed to update faktur with ID ${id}`);
+            }
         }
-    }, [baseUrl, getHeaders, refreshData]);
+    }, [baseUrl, getHeaders]);
 
     const deleteFaktur = useCallback(async (id: string) => {
         try {
-            await axios.delete(`${baseUrl}api/faktur/${id}`, {
-                headers: getHeaders, // Perbaikan: Tidak memanggil sebagai fungsi
+            const response = await axios.delete(`${baseUrl}api/faktur/${id}`, {
+                headers: getHeaders,
             });
 
-            storage.remove(CACHE_KEY);
+            // Clear all page-specific caches for faktur
+            const fakturCacheKeys = Object.keys(localStorage)
+                .filter(key => key.startsWith(CACHE_KEY));
+
+            fakturCacheKeys.forEach(key => storage.remove(key));
+
             eventBus.emit(DATA_EVENTS.FAKTUR_UPDATED);
             eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
 
-            await refreshData();
+            return response.data;
         } catch (err) {
             const error = err as any;
             console.error(`Error deleting faktur with ID ${id}:`, error);
-            throw new Error(error.response?.data?.message || error.message || `Failed to delete faktur with ID ${id}`);
+
+            // Extract more specific error message if available
+            if (error.response?.data?.message) {
+                throw new Error(error.response.data.message);
+            } else if (error.response?.data?.error) {
+                throw new Error(error.response.data.error);
+            } else {
+                throw new Error(error.message || `Failed to delete faktur with ID ${id}`);
+            }
         }
-    }, [baseUrl, getHeaders, refreshData]);
+    }, [baseUrl, getHeaders]);
 
     useEffect(() => {
         fetchData();
