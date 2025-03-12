@@ -61,6 +61,8 @@ interface UserType {
     id: string;
     name: string;
     email?: string;
+    no_telp?: string;
+    nomor_identitas: string;
     role?: string;
 }
 
@@ -83,12 +85,15 @@ interface User {
     alamat?: string;
     jabatan?: string;
     no_telp?: string;
+    nomor_identitas: string;
 }
 
 
 interface Participant {
     id?: string;
     name: string;
+    no_telp?: string;
+    nomor_identitas: string;
     type: 'registered' | 'custom';
 }
 
@@ -165,7 +170,8 @@ export const NotulenForm: React.FC<FormProps> = ({
                     foto: user.foto || "",
                     alamat: user.alamat || "",
                     jabatan: user.jabatan || "",
-                    no_telp: user.no_telp || ""
+                    no_telp: user.no_telp || "",
+                    nomor_identitas: user.nomor_identitas || "" // Add this line
                 }));
                 setUsers(userData);
             } else {
@@ -322,11 +328,8 @@ export const NotulenForm: React.FC<FormProps> = ({
             tanggal: values.tanggal ? values.tanggal.format('YYYY-MM-DD') : ''
         }
 
-        // Jangan lagi menggunakan tanggal_rapat, gunakan tanggal saja sesuai schema validasi
-        // hapus tanggal_rapat jika ada
         delete formattedValues.tanggal_rapat;
 
-        // Create a structured participant list
         const participantsList = [
             // Add selected registered users
             ...selectedUsers.map(userId => {
@@ -336,7 +339,9 @@ export const NotulenForm: React.FC<FormProps> = ({
                     name: user?.name || 'Unknown User',
                     type: 'registered',
                     role: user?.role || '',
-                    email: user?.email || ''
+                    email: user?.email || '',
+                    no_telp: user?.no_telp,
+                    nomor_identitas: user?.nomor_identitas,
                 };
             }),
             // Add custom participants

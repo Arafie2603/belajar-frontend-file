@@ -8,7 +8,6 @@ import {
     SearchOutlined,
     FileTextOutlined,
     FilterOutlined,
-    DownOutlined,
     ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -589,9 +588,6 @@ const SuratMasukPage: React.FC = () => {
                                 </Menu.Item>
                             </Menu>
                         }>
-                            <Button size="large">
-                                Opsi Lainnya <DownOutlined />
-                            </Button>
                         </Dropdown>
                     </Space>
                 </div>

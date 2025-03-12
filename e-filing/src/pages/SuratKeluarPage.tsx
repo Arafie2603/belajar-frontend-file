@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, Key } from 'react';
 import axios from 'axios';
 import {
   Layout,
@@ -16,8 +16,14 @@ import {
   Tooltip,
   Upload,
   Alert,
-  Select
+  Select,
+  Dropdown,
+  Menu,
 } from 'antd';
+
+import { TablePaginationConfig } from 'antd/es/table';
+import { ColumnsType, FilterValue, SorterResult, SortOrder } from 'antd/es/table/interface';
+
 import {
   PlusOutlined,
   EditOutlined,
@@ -25,7 +31,11 @@ import {
   EyeOutlined,
   InboxOutlined,
   FileTextOutlined,
-  SearchOutlined
+  SearchOutlined,
+  DownOutlined,
+  FilterOutlined,
+  SortAscendingOutlined,
+  SortDescendingOutlined
 } from '@ant-design/icons';
 import { UploadProps } from 'antd';
 import CKEditorComponent from '../components/CKEditor';
@@ -40,8 +50,6 @@ import { CACHE_KEYS, invalidateSpecificCache } from '../hooks/useDashboardData';
 const { Content } = Layout;
 const { Title, Text } = Typography;
 const { Dragger } = Upload;
-
-
 
 interface DataType {
   id: string;
@@ -58,6 +66,12 @@ interface DataType {
   sifat_surat: string;
   keterangan?: string;
 }
+
+interface SuratKeluar extends Partial<DataType> {
+  customProperty?: string;
+}
+
+
 
 interface FormProps {
   visible: boolean;
@@ -321,6 +335,11 @@ const SuratKeluar: React.FC = () => {
   const [currentRecord, setCurrentRecord] = useState<DataType | null>(null);
   const [searchText, setSearchText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [filteredInfo, setFilteredInfo] = useState<Record<string, any>>({});
+  const [sortedInfo, setSortedInfo] = useState<{ columnKey?: string; order?: string }>({});
   const BASE_URL = import.meta.env.VITE_BASE_URL || 'https://api-efiling.vercel.app/';
   const navigate = useNavigate();
 
@@ -334,7 +353,6 @@ const SuratKeluar: React.FC = () => {
     refreshData
   } = useSuratCache(BASE_URL);
 
-  // Create a memoized callback for refreshData to avoid recreating it on every render
   const refreshDataCallback = useCallback(() => {
     refreshData();
   }, [refreshData]);
@@ -351,13 +369,17 @@ const SuratKeluar: React.FC = () => {
     const unsubscribeAnyData = eventBus.on(DATA_EVENTS.ANY_DATA_UPDATED, refreshDataCallback);
 
     return () => {
-      // Call the unsubscribe functions
       unsubscribeSuratKeluar();
       unsubscribeAnyData();
     };
   }, [refreshDataCallback]);
 
-  const handleEdit = async (record: DataType) => {
+  const handleEdit = async (record: SuratKeluar) => {
+    if (!record.id) {
+      message.error("ID surat tidak valid!");
+      return;
+    }
+
     try {
       const currentSurat = await fetchSuratById(record.id);
       if (currentSurat) {
@@ -368,6 +390,44 @@ const SuratKeluar: React.FC = () => {
       const error = err as Error;
       message.error('Gagal mengambil data surat: ' + (error.message || 'Unknown error'));
     }
+  };
+
+
+  const getMonths = () => {
+    const months: { [key: string]: string } = {
+      '01': 'Januari',
+      '02': 'Februari',
+      '03': 'Maret',
+      '04': 'April',
+      '05': 'Mei',
+      '06': 'Juni',
+      '07': 'Juli',
+      '08': 'Agustus',
+      '09': 'September',
+      '10': 'Oktober',
+      '11': 'November',
+      '12': 'Desember'
+    };
+
+    const uniqueMonths = new Set<string>();
+
+    data.forEach((item: DataType) => {
+      const dateParts = item.tanggal.split('/');
+      if (dateParts.length > 1) {
+        const monthKey = dateParts[1]; // month is in the second position (DD/MM/YYYY)
+        if (months[monthKey]) {
+          uniqueMonths.add(`${monthKey}:${months[monthKey]}`);
+        }
+      }
+    });
+
+    return Array.from(uniqueMonths).map(monthEntry => {
+      const [monthKey, monthName] = monthEntry.split(':');
+      return {
+        text: monthName,
+        value: monthKey
+      };
+    }).sort((a, b) => parseInt(a.value) - parseInt(b.value));
   };
 
   const handleDelete = async (id: string) => {
@@ -382,16 +442,52 @@ const SuratKeluar: React.FC = () => {
           await deleteSurat(id);
           message.success('Surat berhasil dihapus!');
           invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
-
           invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
           invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
-
           eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
           eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
         } catch (err) {
           const error = err as Error;
           console.error('Error deleting surat:', error);
           message.error(error.message || 'Gagal menghapus surat!');
+        }
+      },
+    });
+  };
+
+  const handleMultipleDelete = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('Silakan pilih surat yang ingin dihapus terlebih dahulu');
+      return;
+    }
+
+    Modal.confirm({
+      title: 'Konfirmasi Penghapusan',
+      content: `Apakah Anda yakin ingin menghapus ${selectedRowKeys.length} surat terpilih?`,
+      okText: 'Ya, Hapus',
+      okType: 'danger',
+      cancelText: 'Batal',
+      onOk: async () => {
+        try {
+          // Create an array of promises for deleting each selected surat
+          const deletePromises = selectedRowKeys.map(id => deleteSurat(id as string));
+
+          // Wait for all delete operations to complete
+          await Promise.all(deletePromises);
+
+          message.success(`${selectedRowKeys.length} surat berhasil dihapus!`);
+          setSelectedRowKeys([]);
+
+          // Invalidate caches and emit events
+          invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+          invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+          invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+          eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+          eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
+        } catch (err) {
+          const error = err as Error;
+          console.error('Error deleting multiple surats:', error);
+          message.error(error.message || 'Gagal menghapus beberapa surat!');
         }
       },
     });
@@ -408,13 +504,11 @@ const SuratKeluar: React.FC = () => {
       });
 
       message.success('Surat keluar berhasil ditambahkan!');
-      
+
       setIsModalVisible(false);
       invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
-
       invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
       invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
-
       eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
       eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
     } catch (err) {
@@ -436,14 +530,11 @@ const SuratKeluar: React.FC = () => {
       await updateSurat(currentRecord.id, formData);
       message.success('Surat keluar berhasil diperbarui!');
       invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
-
       invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
       invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
-
       eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
       eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
       setIsEditModalVisible(false);
-      // No need to call refreshData here, it will be triggered by the event
     } catch (err) {
       const error = err as Error;
       message.error(
@@ -454,19 +545,203 @@ const SuratKeluar: React.FC = () => {
     }
   };
 
+  // const handleDeleteByMonth = (monthNumber: string) => {
+  //   const monthName = {
+  //     '01': 'Januari',
+  //     '02': 'Februari',
+  //     '03': 'Maret',
+  //     '04': 'April',
+  //     '05': 'Mei',
+  //     '06': 'Juni',
+  //     '07': 'Juli',
+  //     '08': 'Agustus',
+  //     '09': 'September',
+  //     '10': 'Oktober',
+  //     '11': 'November',
+  //     '12': 'Desember'
+  //   }[monthNumber] || monthNumber;
+
+  //   const itemsToDelete = data.filter((item) => {
+  //     const dateParts = item.tanggal.split('/');
+  //     return dateParts.length > 1 && dateParts[1] === monthNumber;
+  //   });
+
+  //   if (itemsToDelete.length === 0) {
+  //     message.warning(`Tidak ada surat pada bulan ${monthName}`);
+  //     return;
+  //   }
+
+  //   Modal.confirm({
+  //     title: 'Konfirmasi Penghapusan',
+  //     content: `Apakah Anda yakin ingin menghapus ${itemsToDelete.length} surat pada bulan ${monthName}?`,
+  //     okText: 'Ya, Hapus',
+  //     okType: 'danger',
+  //     cancelText: 'Batal',
+  //     onOk: async () => {
+  //       try {
+  //         const deletePromises = itemsToDelete.map(item => deleteSurat(item.id));
+  //         await Promise.all(deletePromises);
+
+  //         message.success(`${itemsToDelete.length} surat pada bulan ${monthName} berhasil dihapus!`);
+  //         setSelectedRowKeys([]);
+
+  //         invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+  //         invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+  //         invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+  //         eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+  //         eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
+  //       } catch (err) {
+  //         const error = err as Error;
+  //         console.error('Error deleting surats by month:', error);
+  //         message.error(error.message || 'Gagal menghapus surat!');
+  //       }
+  //     },
+  //   });
+  // };
+
+
+  const handleTableChange = (
+    pagination: TablePaginationConfig,
+    filters: Record<string, FilterValue | null>,
+    sorter: SorterResult<SuratKeluar> | SorterResult<SuratKeluar>[],
+  ) => {
+    setCurrentPage(pagination.current || 1);
+    setPageSize(pagination.pageSize || 10);
+    setFilteredInfo(filters);
+
+    const sortedInfo = Array.isArray(sorter) ? sorter[0] : sorter;
+
+    setSortedInfo({
+      columnKey: sortedInfo.columnKey ? String(sortedInfo.columnKey) : undefined,
+      order: sortedInfo.order ?? undefined,
+    });
+  };
+
+
+
+  // Get unique values for filter options
+  const getUniqueFilterOptions = (dataIndex: keyof DataType) => {
+    const uniqueValues = new Set();
+    data.forEach((item: DataType) => {
+      if (item[dataIndex]) {
+        uniqueValues.add(item[dataIndex].toString());
+      }
+    });
+    return Array.from(uniqueValues).map(value => ({
+      text: value as string,
+      value: value as string
+    }));
+  };
+
+  const handleSelectAllData = () => {
+    setSelectedRowKeys(data.map(item => item.id));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedRowKeys([]);
+  };
+
+  const handleInvertCurrentPage = () => {
+    const currentPageData = data.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const currentPageIds = currentPageData.map(item => item.id);
+
+    const newSelectedRowKeys = [...selectedRowKeys];
+
+    currentPageIds.forEach(id => {
+      const index = newSelectedRowKeys.indexOf(id);
+      if (index >= 0) {
+        newSelectedRowKeys.splice(index, 1);
+      } else {
+        newSelectedRowKeys.push(id);
+      }
+    });
+
+    setSelectedRowKeys(newSelectedRowKeys);
+  };
+
+  const batchOperationsMenu = (
+    <Menu>
+      <Menu.Item key="selectAll" onClick={handleSelectAllData}>
+        Pilih Semua Data
+      </Menu.Item>
+      <Menu.Item key="clearAll" onClick={handleClearSelection}>
+        Hapus Semua Pilihan
+      </Menu.Item>
+      <Menu.Item key="invertCurrent" onClick={handleInvertCurrentPage}>
+        Balik Pilihan Halaman Ini
+      </Menu.Item>
+      <Menu.Divider />
+      <Menu.Item key="deleteSelected" onClick={handleMultipleDelete}>
+        Hapus Data Terpilih ({selectedRowKeys.length})
+      </Menu.Item>
+    </Menu>
+  );
+
   // Fungsi helper untuk type checking
   const isSearchableValue = (value: unknown): value is string => {
     return typeof value === 'string' || typeof value === 'number';
   };
 
-  const filteredData = (data as DataType[]).filter((item) => {
-    return Object.values(item).some((val) => {
-      if (isSearchableValue(val)) {
-        return val.toString().toLowerCase().includes(searchText.toLowerCase());
+  // Apply multiple filters: search text and column filters
+  const getFilteredData = () => {
+    let filteredResult = [...data];
+
+    // Apply search text filtering
+    if (searchText) {
+      filteredResult = filteredResult.filter((item: DataType) => {
+        return Object.values(item).some((val) => {
+          if (isSearchableValue(val)) {
+            return val.toString().toLowerCase().includes(searchText.toLowerCase());
+          }
+          return false;
+        });
+      });
+    }
+
+    Object.keys(filteredInfo).forEach(key => {
+      const filterValues = filteredInfo[key];
+      if (filterValues && filterValues.length > 0) {
+        filteredResult = filteredResult.filter((item: DataType) => {
+          const itemValue = item[key as keyof DataType] ?? '';
+          if (key === 'tanggal' && filterValues.length > 0) {
+            const dateParts = itemValue.toString().split('/');
+            if (dateParts.length > 1) {
+              return filterValues.includes(dateParts[1]);
+            }
+            return false;
+          }
+          return filterValues.includes(itemValue?.toString());
+        });
       }
-      return false;
     });
-  });
+
+    return filteredResult;
+  };
+
+  const filteredData = getFilteredData();
+
+  // Sort data if necessary
+  const getSortedData = () => {
+    const { columnKey, order } = sortedInfo;
+
+    if (columnKey && order) {
+      return [...filteredData].sort((a, b) => {
+        const aValue = a[columnKey as keyof DataType];
+        const bValue = b[columnKey as keyof DataType];
+
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          const comparison = aValue.localeCompare(bValue);
+          return order === 'ascend' ? comparison : -comparison;
+        }
+
+        return 0;
+      });
+    }
+
+    return filteredData;
+  };
+
+  const sortedAndFilteredData = getSortedData();
 
   if (loading) {
     return <LoadingSkeleton />;
@@ -486,36 +761,103 @@ const SuratKeluar: React.FC = () => {
     );
   }
 
-  const columns = [
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (selectedKeys: React.Key[]) => setSelectedRowKeys(selectedKeys),
+    columnTitle: (
+      <Dropdown overlay={batchOperationsMenu} trigger={['click']}>
+        <Button size="small" style={{ margin: 0, padding: '0 4px' }} onClick={e => e.stopPropagation()}>
+          <DownOutlined />
+        </Button>
+      </Dropdown>
+    ),
+    columnWidth: 60,
+  };
+
+
+  const columns: ColumnsType<Partial<DataType>> = [
     {
-      title: 'Nomor Surat',
-      dataIndex: 'surat_nomor',
-      key: 'surat_nomor',
-      align: 'center' as const,
+      title: "Nomor Surat",
+      dataIndex: "surat_nomor",
+      key: "surat_nomor",
+      align: "center",  // ✅ Perbaikan tipe align
+      filteredValue: filteredInfo.surat_nomor as Key[] | null,
+      filters: [
+        { text: "Surat A", value: "A" },
+        { text: "Surat B", value: "B" }
+      ],
+      filterIcon: (filtered: boolean) => (
+        <span style={{ color: filtered ? "#1890ff" : undefined }}>🔍</span>
+      ),
+      sorter: (a, b) => (a.surat_nomor ?? "").localeCompare(b.surat_nomor ?? ""),
+      sortOrder:
+        sortedInfo.columnKey === "surat_nomor"
+          ? (sortedInfo.order as SortOrder)
+          : null,  // ✅ Perbaikan tipe sortOrder
     },
     {
-      title: 'Tanggal Surat',
-      dataIndex: 'tanggal',
-      key: 'tanggal',
-      align: 'center' as const,
+      title: "Tanggal Surat",
+      dataIndex: "tanggal",
+      key: "tanggal",
+      align: "center",
+      filteredValue: filteredInfo.tanggal as Key[] | null,
+      filters: getMonths().map((month) => ({
+        text: month.text,
+        value: month.value,
+      })),
+      filterIcon: (filtered: boolean) => (
+        <FilterOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
+      ),
+      sorter: (a: SuratKeluar, b: SuratKeluar) => {
+        const dateA = dayjs(a.tanggal, "DD/MM/YYYY");
+        const dateB = dayjs(b.tanggal, "DD/MM/YYYY");
+        return dateA.valueOf() - dateB.valueOf();
+      },
+      sortOrder:
+        sortedInfo.columnKey === "tanggal"
+          ? (sortedInfo.order as SortOrder | undefined)
+          : undefined,
+
     },
     {
-      title: 'Pengirim',
-      dataIndex: 'pengirim',
-      key: 'pengirim',
-      align: 'center' as const,
+      title: "Pengirim",
+      dataIndex: "pengirim",
+      key: "pengirim",
+      align: "center",
+      filteredValue: filteredInfo.pengirim as Key[] | null,
+      filters: getUniqueFilterOptions("pengirim"),
+      filterIcon: (filtered: boolean) => (
+        <FilterOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
+      ),
+      sorter: (a, b) => (a.pengirim ?? "").localeCompare(b.pengirim ?? ""),
+      sortOrder:
+        sortedInfo.columnKey === "pengirim"
+          ? (sortedInfo.order as SortOrder | undefined)
+          : undefined,
+
     },
     {
-      title: 'Penerima',
-      dataIndex: 'penerima',
-      key: 'penerima',
-      align: 'center' as const,
+      title: "Penerima",
+      dataIndex: "penerima",
+      key: "penerima",
+      align: "center",
+      filteredValue: filteredInfo.penerima as Key[] | null,
+      filters: getUniqueFilterOptions("penerima"),
+      filterIcon: (filtered: boolean) => (
+        <FilterOutlined style={{ color: filtered ? "#1890ff" : undefined }} />
+      ),
+      sorter: (a, b) => (a.penerima ?? "").localeCompare(b.penerima ?? ""),
+      sortOrder:
+        sortedInfo.columnKey === "penerima"
+          ? (sortedInfo.order as SortOrder | undefined)
+          : undefined,
+
     },
     {
-      title: 'Aksi',
-      key: 'aksi',
-      align: 'center' as const,
-      render: (_: unknown, record: DataType) => (
+      title: "Aksi",
+      key: "aksi",
+      align: "center",
+      render: (_: unknown, record: SuratKeluar) => (
         <Space>
           <Tooltip title="Lihat Detail">
             <Button
@@ -525,23 +867,24 @@ const SuratKeluar: React.FC = () => {
             />
           </Tooltip>
           <Tooltip title="Edit">
-            <Button
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            />
+            <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
           </Tooltip>
+
           <Tooltip title="Hapus">
             <Button
               type="primary"
               danger
               icon={<DeleteOutlined />}
-              onClick={() => handleDelete(record.id)}
+              onClick={() => handleDelete(record.id ?? '')}
             />
           </Tooltip>
         </Space>
       ),
     },
   ];
+
+
+
 
   return (
     <Content style={{ margin: '16px' }}>
@@ -561,22 +904,34 @@ const SuratKeluar: React.FC = () => {
                 display: 'inline-block',
                 verticalAlign: 'middle'
               }}>
-                {data.length}
+                {sortedAndFilteredData.length}
               </span>
             </Title>
             <Text type="secondary">Kelola semua surat keluar Anda di sini</Text>
           </div>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setIsModalVisible(true)}
-            size="large"
-          >
-            Tambah Surat
-          </Button>
+          <Space>
+            {selectedRowKeys.length > 0 && (
+              <Button
+                type="primary"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={handleMultipleDelete}
+              >
+                Hapus ({selectedRowKeys.length})
+              </Button>
+            )}
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setIsModalVisible(true)}
+              size="large"
+            >
+              Tambah Surat
+            </Button>
+          </Space>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Input
             placeholder="Cari surat..."
             prefix={<SearchOutlined />}
@@ -584,19 +939,59 @@ const SuratKeluar: React.FC = () => {
             style={{ width: 300 }}
             allowClear
           />
+          <Space>
+            <Tooltip title="Urutkan Naik">
+              <Button
+                icon={<SortAscendingOutlined />}
+                onClick={() => {
+                  const newSortedInfo = { ...sortedInfo };
+                  newSortedInfo.order = 'ascend';
+                  setSortedInfo(newSortedInfo);
+                }}
+                type={sortedInfo.order === 'ascend' ? 'primary' : 'default'}
+              />
+            </Tooltip>
+            <Tooltip title="Urutkan Turun">
+              <Button
+                icon={<SortDescendingOutlined />}
+                onClick={() => {
+                  const newSortedInfo = { ...sortedInfo };
+                  newSortedInfo.order = 'descend';
+                  setSortedInfo(newSortedInfo);
+                }}
+                type={sortedInfo.order === 'descend' ? 'primary' : 'default'}
+              />
+            </Tooltip>
+            <Button
+              onClick={() => {
+                setFilteredInfo({});
+                setSortedInfo({});
+                setSearchText('');
+              }}
+            >
+              Reset Filter
+            </Button>
+          </Space>
         </div>
 
         <Table
           columns={columns}
-          dataSource={filteredData}
+          dataSource={sortedAndFilteredData}
           rowKey="id"
           loading={loading}
+          rowSelection={rowSelection}
           pagination={{
-            pageSize: 10,
+            current: currentPage,
+            pageSize: pageSize,
+            onChange: (page, size) => {
+              setCurrentPage(page);
+              setPageSize(size);
+            },
             showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} surat`,
             showSizeChanger: true,
             showQuickJumper: true,
           }}
+          onChange={handleTableChange}
           scroll={{ x: 'max-content' }}
         />
       </Card>
@@ -623,6 +1018,6 @@ const SuratKeluar: React.FC = () => {
       />
     </Content>
   );
-};
+}
 
 export default SuratKeluar;

@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@googlemaps/js-api-loader": "^1.16.8",
     "@heroicons/react": "^2.2.0",
     "@shadcn/ui": "^0.0.4",
     "autoprefixer": "^10.4.20",
@@ -8,5 +9,8 @@
     "postcss": "^8.5.3",
     "react-pdf": "^9.2.1",
     "tailwindcss": "^4.0.9"
+  },
+  "devDependencies": {
+    "@types/google.maps": "^3.58.1"
   }
 }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -45,11 +46,12 @@ import {
     CloseCircleOutlined,
     EyeOutlined
 } from '@ant-design/icons';
+
 import { useAuth } from '../hooks/useAuth';
 import dayjs from 'dayjs';
 import 'dayjs/locale/id';
 dayjs.locale('id');
-
+import { message as antMessage } from 'antd';
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
 const { confirm } = Modal;
@@ -67,6 +69,7 @@ interface NotulenDetail {
         type: string;
         role?: string;
         email?: string;
+        no_telp?: string;
     }>;
     agenda: string;
     dokumen_lampiran: string;
@@ -74,6 +77,25 @@ interface NotulenDetail {
     updated_by: string;
     created_by: string;
     user_id: string;
+}
+
+interface User {
+    id: string;
+    name: string;
+    email: string;
+    no_telp?: string;
+    role?: string;
+    nomor_identitas?: string;
+}
+
+interface Participant {
+    id?: string;
+    name: string;
+    type: 'registered' | 'custom';
+    role?: string;
+    email?: string;
+    no_telp?: string;
+    nomor_identitas?: string;
 }
 
 const getFileType = (url: string): 'pdf' | 'image' | 'document' | 'unknown' => {
@@ -131,64 +153,100 @@ const DetailNotulen: React.FC = () => {
     useEffect(() => {
         const fetchNotulenDetail = async () => {
             let loadingInterval: NodeJS.Timeout | undefined;
-
+        
             try {
-                // Reset loading state
                 setLoadingProgress(0);
                 setDataReady(false);
-
-                // Mulai interval loading yang lebih lambat
+        
                 loadingInterval = setInterval(() => {
-                    setLoadingProgress(prev => {
-                        // Batasi progress maksimum ke 95% selama data masih diambil
-                        if (prev >= 95) {
-                            return 95;
-                        }
-                        return prev + 5; // Lebih lambat agar terlihat lebih natural
-                    });
+                    setLoadingProgress(prev => (prev >= 95 ? 95 : prev + 5));
                 }, 300);
-
+        
+                // Fetch notulen details
                 const response = await axios.get(`${BASE_URL}api/notulen/${id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-
+        
                 const responseData = response.data.data;
-
+        
+                // Fetch user data
+                const usersResponse = await axios.get(`${BASE_URL}api/users`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+        
+                // Fix #1: Check for paginated data structure and handle appropriately
+                let usersData = [];
+                if (usersResponse.data?.data?.paginatedData && Array.isArray(usersResponse.data.data.paginatedData)) {
+                    usersData = usersResponse.data.data.paginatedData.map((user: any) => ({
+                        id: user.id,
+                        name: user.nama || user.name,
+                        email: user.email,
+                        no_telp: user.no_telp,
+                        nomor_identitas: user.nomor_identitas
+                    }));
+                } else if (Array.isArray(usersResponse.data.data)) {
+                    usersData = usersResponse.data.data;
+                }
+        
+                console.log("usersData:", usersData); // Debugging, make sure this shows phone numbers
+        
+                // Fix #2: Create a more robust user map that includes all user details
+                const userMap: Record<string, User> = {};
+                usersData.forEach((user: User) => {
+                    if (user.id) {
+                        userMap[user.id] = user;
+                    }
+                });
+        
+                let parsedPeserta: Participant[] = [];
+        
                 if (responseData.peserta) {
                     try {
-                        responseData.parsedPeserta = JSON.parse(responseData.peserta);
+                        parsedPeserta = JSON.parse(responseData.peserta) as Participant[];
+        
+                        // Fix #3: Enhanced mapping with better error handling
+                        parsedPeserta = parsedPeserta.map((participant: Participant) => {
+                            if (participant.id && participant.type === 'registered' && userMap[participant.id]) {
+                                const userData = userMap[participant.id];
+                                // Fix #4: Check for phone number in multiple possible fields
+                                const phoneNumber = userData.no_telp || participant.no_telp || '';
+                                
+                                return {
+                                    ...participant,
+                                    no_telp: phoneNumber,
+                                    email: userData.email || participant.email || ''
+                                };
+                            }
+                            return participant;
+                        });
+        
+                        console.log('Enhanced participants with phone numbers:', parsedPeserta);
                     } catch (parseErr) {
                         console.error('Error parsing peserta:', parseErr);
-                        responseData.parsedPeserta = [];
+                        parsedPeserta = [];
                     }
-                } else {
-                    responseData.parsedPeserta = [];
                 }
-
-                // Setelah data selesai dimuat, selesaikan loading
+        
+                responseData.parsedPeserta = parsedPeserta;
+        
                 setData(responseData);
                 setError(null);
-
-                // Hentikan interval loading
+        
                 if (loadingInterval) clearInterval(loadingInterval);
-
-                // Set loading ke 100% dan tunggu sebentar sebelum menampilkan halaman
+        
                 setLoadingProgress(100);
-
-                // Tunggu 500ms setelah loading 100% sebelum menampilkan halaman
                 setTimeout(() => {
                     setLoading(false);
                     setDataReady(true);
                 }, 500);
-
-            } catch (err: unknown) {
+        
+            } catch (err) {
                 console.error('Error fetching notulen details:', err);
                 setError(err instanceof Error ? err.message : 'Terjadi kesalahan saat memuat data');
-
-                // Hentikan interval loading
+        
                 if (loadingInterval) clearInterval(loadingInterval);
                 setLoadingProgress(100);
-
+        
                 setTimeout(() => {
                     setLoading(false);
                 }, 500);
@@ -200,20 +258,144 @@ const DetailNotulen: React.FC = () => {
         }
     }, [id, token, BASE_URL]);
 
+
+
     const handlePrint = () => {
         window.print();
     };
 
-    const handleShare = () => {
-        confirm({
-            title: 'Bagikan Notulen',
-            icon: <ShareAltOutlined />,
-            content: 'Kirim link notulen ini melalui email kepada peserta rapat?',
-            onOk() {
-                console.log('OK');
+    const handleShare = async () => {
+        try {
+            // Pastikan data tersedia dan parsedPeserta tidak undefined/null
+            const pesertaList = data?.parsedPeserta ?? [];
+    
+            if (pesertaList.length === 0) {
+                antMessage.error('Tidak ada peserta yang terdaftar untuk dibagikan');
+                return;
             }
-        });
+    
+            // Debug participant data
+            console.log('Participant data before validation:', pesertaList);
+    
+            // Improved phone number validation
+            const validParticipants = pesertaList.filter(p => {
+                const hasPhone = p.no_telp && p.no_telp.trim().length > 0;
+                if (!hasPhone) {
+                    console.log(`Participant ${p.name} has no valid phone number`);
+                }
+                return hasPhone;
+            });
+    
+            if (validParticipants.length === 0) {
+                antMessage.error('Tidak ada nomor telepon peserta yang valid');
+                console.log('No valid participants with phone numbers found');
+                return;
+            }
+    
+            console.log('Valid participants with phone numbers:', validParticipants);
+    
+            // Show confirmation modal
+            confirm({
+                title: 'Bagikan Notulen',
+                icon: <ShareAltOutlined />,
+                content: `Kirim notifikasi rapat melalui WhatsApp kepada ${validParticipants.length} peserta?`,
+                okText: 'Kirim',
+                cancelText: 'Batal',
+                onOk: async () => {
+                    // Show loading message
+                    const closeLoading = antMessage.loading('Mengirim pesan ke peserta...', 0);
+    
+                    try {
+                        // Format meeting date
+                        const meetingDate = dayjs(data?.tanggal_rapat);
+                        const now = dayjs();
+                        const isMeetingPassed = now.isAfter(meetingDate);
+    
+                        // Prepare messages array with improved phone formatting
+                        const messages = validParticipants.map(participant => {
+                            let phoneNumber = participant.no_telp?.trim() ?? '';
+                            console.log(`Processing ${participant.name} with original phone: ${phoneNumber}`);
+    
+                            // Format phone number properly
+                            if (!phoneNumber.startsWith('+')) {
+                                if (phoneNumber.startsWith('0')) {
+                                    phoneNumber = '+62' + phoneNumber.substring(1);
+                                } else if (phoneNumber.startsWith('62')) {
+                                    phoneNumber = '+' + phoneNumber;
+                                } else {
+                                    phoneNumber = '+62' + phoneNumber;
+                                }
+                            }
+                            
+                            console.log(`Formatted phone number: ${phoneNumber}`);
+    
+                            // Rest of your message formatting code unchanged
+                            let timeContext;
+                            if (isMeetingPassed) {
+                                timeContext = `pada tanggal ${meetingDate.format('D MMMM YYYY')}`;
+                            } else {
+                                const daysUntil = meetingDate.diff(now, 'day');
+                                if (daysUntil === 0) {
+                                    timeContext = `hari ini pada ${meetingDate.format('HH:mm')}`;
+                                } else if (daysUntil === 1) {
+                                    timeContext = `besok pada ${meetingDate.format('HH:mm')}`;
+                                } else {
+                                    timeContext = `dalam ${daysUntil} hari pada ${meetingDate.format('D MMMM YYYY, HH:mm')}`;
+                                }
+                            }
+    
+                            return {
+                                phone: phoneNumber,
+                                message: `Hallo *${participant.name}*,\n\n` +
+                                    `Mimin izin ${isMeetingPassed ? "menginformasikan bahwa" : "mengingatkan untuk acara"} ` +
+                                    `*${data?.judul}* ${isMeetingPassed ? "telah dilaksanakan" : "akan dilaksanakan"} ${timeContext}. ` +
+                                    (isMeetingPassed ? "Terima kasih atas partisipasi Anda." : "Pastikan Anda mempersiapkan diri dengan baik ya! 🙌") + "\n\n" +
+                                    `🏷️ Judul: ${data?.judul}\n` +
+                                    `📆 Tanggal: ${meetingDate.format("dddd, D MMMM YYYY")}\n` +
+                                    `🕒 Waktu: ${meetingDate.format("HH:mm")} WIB\n` +
+                                    `📍 Lokasi: ${data?.lokasi}\n` +
+                                    `👨‍💼 Pemimpin Rapat: ${data?.pemimpin_rapat}\n\n` +
+                                    (isMeetingPassed ? "Semoga informasi ini bermanfaat." : "Jangan lupa hadir tepat waktu ya! 😊") + "\n\n" +
+                                    "Salam hangat dari mimin, dan semangat selalu untuk labkomers! 💪"
+                            };
+                        });
+    
+                        if (messages.length === 0) {
+                            closeLoading();
+                            antMessage.error('Tidak ada nomor telepon peserta yang valid');
+                            return;
+                        }
+    
+                        console.log('Sending messages to:', messages.map(m => m.phone));
+    
+                        // Send batch messages
+                        const response = await axios.post(
+                            'http://localhost:4001/sessions/a0b531adf5b71043/send-batch',
+                            { messages },
+                            { headers: { 'Content-Type': 'application/json' } }
+                        );
+    
+                        // Close the loading message
+                        closeLoading();
+    
+                        if (response.data.success) {
+                            antMessage.success(`Berhasil mengirim notifikasi kepada ${messages.length} peserta`);
+                        } else {
+                            antMessage.error('Gagal mengirim pesan: ' + (response.data.message || 'Terjadi kesalahan'));
+                        }
+                    } catch (error) {
+                        closeLoading();
+                        console.error('Error sending messages:', error);
+                        antMessage.error('Gagal mengirim pesan: ' + (error instanceof Error ? error.message : 'Terjadi kesalahan'));
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error in handleShare:', error);
+            antMessage.error('Terjadi kesalahan');
+        }
     };
+
 
     const handleDownload = () => {
         if (data?.dokumen_lampiran) {
