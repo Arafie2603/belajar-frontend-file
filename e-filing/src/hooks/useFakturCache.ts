@@ -12,7 +12,7 @@ interface FakturType {
 }
 
 const CACHE_KEY = 'faktur_cache';
-const CACHE_EXPIRY = 5 * 60 * 1000; // 5 menit dalam milidetik
+const CACHE_EXPIRY = 5 * 60 * 1000;
 
 export const useFakturCache = (baseUrl: string) => {
     const [data, setData] = useState<any>({

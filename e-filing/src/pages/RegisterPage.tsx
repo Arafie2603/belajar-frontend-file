@@ -231,7 +231,7 @@ const Register: React.FC = () => {
             setSuccess('Registrasi berhasil! Silahkan login dengan akun Anda.');
 
             setTimeout(() => {
-                navigate('/login');
+                navigate('/');
             }, 3000);
 
         } catch (err) {

@@ -13,7 +13,8 @@ export const CACHE_KEYS = {
     USERS: 'efiling_users',
     DASHBOARD_STATS: 'efiling_dashboard_stats',
     RECENT_DOCS: 'efiling_recent_docs',
-    CALENDAR_EVENTS: 'efiling_calendar_events'
+    CALENDAR_EVENTS: 'efiling_calendar_events',
+    UPCOMING_EVENTS: 'efiling_upcoming_events'
 };
 
 // Cache expiry in milliseconds (30 minutes)
@@ -341,7 +342,7 @@ export const useDashboardData = () => {
 
     // Store fetchData in a ref to prevent effect dependencies from changing
     const fetchDataRef = useRef(fetchData);
-    
+
     // Update the ref whenever fetchData changes
     useEffect(() => {
         fetchDataRef.current = fetchData;
@@ -469,6 +470,7 @@ export const useDashboardData = () => {
             setLoading(false);
         }
     }, [getDataWithCache]); // Add getDataWithCache as a dependency
+    
 
     // Memoize updateCalendarEvents
     const updateCalendarEvents = useCallback(async () => {
@@ -477,14 +479,14 @@ export const useDashboardData = () => {
             const notulenRes = await axios.get<ApiResponse<Notulen>>(
                 'https://api-efiling.vercel.app/api/notulen'
             );
-    
+
             const paginatedData = notulenRes.data?.data?.paginatedData;
-            
+
             if (!Array.isArray(paginatedData)) {
                 console.error("Invalid API response: paginatedData is missing or not an array");
                 return;
             }
-    
+
             // Proses data notulen untuk kalender
             const eventsMap = new Map<string, CalendarEvent[]>();
             paginatedData.forEach((rapat: Notulen) => {
@@ -493,16 +495,16 @@ export const useDashboardData = () => {
                     type: "warning",
                     content: rapat.judul
                 };
-    
+
                 if (eventsMap.has(date)) {
                     eventsMap.get(date)?.push(event);
                 } else {
                     eventsMap.set(date, [event]);
                 }
             });
-    
+
             setCalendarEvents(eventsMap);
-    
+
             // Update cache
             storage.set(CACHE_KEYS.CALENDAR_EVENTS, {
                 data: Array.from(eventsMap.entries()),

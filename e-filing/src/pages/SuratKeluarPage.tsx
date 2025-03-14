@@ -166,15 +166,12 @@ const SuratForm: React.FC<FormProps> = ({
       }
     });
 
-    // Add editor content
     formData.append('isi_surat', editorData);
 
-    // Add file if a new file has been selected
     if (fileList.length > 0 && fileList[0].originFileObj) {
       formData.append('gambar', fileList[0].originFileObj);
     }
 
-    // For edit mode, we need to handle whether a new file was selected
     if (isEdit) {
       formData.append('keep_existing_file', (!fileList.length || !fileList[0].originFileObj) ? 'true' : 'false');
     }
@@ -441,10 +438,10 @@ const SuratKeluar: React.FC = () => {
         try {
           await deleteSurat(id);
           message.success('Surat berhasil dihapus!');
-          invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+          invalidateSpecificCache(CACHE_KEYS.SURAT_KELUAR);
           invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
           invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
-          eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+          eventBus.emit(DATA_EVENTS.SURAT_KELUAR_UPDATED);
           eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
         } catch (err) {
           const error = err as Error;
@@ -506,10 +503,10 @@ const SuratKeluar: React.FC = () => {
       message.success('Surat keluar berhasil ditambahkan!');
 
       setIsModalVisible(false);
-      invalidateSpecificCache(CACHE_KEYS.SURAT_MASUK);
+      invalidateSpecificCache(CACHE_KEYS.SURAT_KELUAR);
       invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
       invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
-      eventBus.emit(DATA_EVENTS.SURAT_MASUK_UPDATED);
+      eventBus.emit(DATA_EVENTS.SURAT_KELUAR_UPDATED);
       eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
     } catch (err) {
       const error = err as any;

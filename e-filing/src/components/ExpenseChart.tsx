@@ -8,15 +8,25 @@ import {
     Radio,
     DatePicker,
     Space,
-    Alert
+    Alert,
+    Segmented,
+    Statistic,
+    Row,
+    Col,
+    Tooltip as AntTooltip
 } from 'antd';
 
 import {
     LineChartOutlined,
+    BarChartOutlined,
     ReloadOutlined,
-    DollarOutlined
+    DollarOutlined,
+    ArrowUpOutlined,
+    ArrowDownOutlined,
+    InfoCircleOutlined,
+    CalendarOutlined
 } from '@ant-design/icons';
-import { LineChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line } from 'recharts';
+import { LineChart, BarChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line, Bar } from 'recharts';
 import dayjs from 'dayjs';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -25,7 +35,7 @@ import { useAuth } from '../hooks/useAuth';
 dayjs.extend(weekOfYear);
 dayjs.extend(isoWeek);
 
-const { Text } = Typography;
+const { Title, Text } = Typography;
 
 interface User {
     id: string;
@@ -52,9 +62,10 @@ interface ApiResponseMeta {
     unpaged: boolean;
     totalPages: number;
     totalItems: number;
-    sortBy: any[];
-    filter: Record<string, any>;
+    sortBy: (string | { field: string; direction: 'asc' | 'desc' })[];
+    filter: Record<string, unknown>;
 }
+
 
 interface ApiResponseData {
     paginatedData: FakturItem[];
@@ -88,13 +99,30 @@ interface CustomTooltipProps {
     label?: string;
 }
 
+type ChartType = 'line' | 'bar';
+type ViewMode = 'yearly' | 'monthly' | 'weekly';
+
 const ExpenseChart: React.FC = () => {
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [fakturData, setFakturData] = useState<FakturItem[]>([]);
-    const [viewMode, setViewMode] = useState<'yearly' | 'monthly' | 'weekly'>('monthly');
+    const [viewMode, setViewMode] = useState<ViewMode>('monthly');
+    const [chartType, setChartType] = useState<ChartType>('line');
     const [selectedYear, setSelectedYear] = useState<number>(dayjs().year());
     const [chartData, setChartData] = useState<ChartDataItem[]>([]);
+    const [statistics, setStatistics] = useState<{
+        total: number;
+        average: number;
+        maxMonth: string;
+        maxValue: number;
+        growth: number;
+    }>({
+        total: 0,
+        average: 0,
+        maxMonth: '',
+        maxValue: 0,
+        growth: 0
+    });
 
     const { token } = useAuth();
 
@@ -128,12 +156,23 @@ const ExpenseChart: React.FC = () => {
     const prepareChartData = useCallback(() => {
         if (!fakturData.length) {
             setChartData([]);
+            setStatistics({
+                total: 0,
+                average: 0,
+                maxMonth: '',
+                maxValue: 0,
+                growth: 0
+            });
             return;
         }
 
         const data = JSON.parse(JSON.stringify(fakturData));
-
         let formattedData: ChartDataItem[] = [];
+        let totalSum = 0;
+        let maxMonth = '';
+        let maxValue = 0;
+        let previousPeriodTotal = 0;
+        let currentPeriodTotal = 0;
 
         switch (viewMode) {
             case 'yearly': {
@@ -150,8 +189,23 @@ const ExpenseChart: React.FC = () => {
                 }, {});
 
                 formattedData = Object.values(yearlyData).sort((a, b) => Number(a.year) - Number(b.year));
-                formattedData.forEach(item => {
+
+                // Calculate statistics
+                formattedData.forEach((item, index) => {
                     item.average = item.total / item.count;
+                    totalSum += item.total;
+
+                    if (item.total > maxValue) {
+                        maxValue = item.total;
+                        maxMonth = item.year || '';
+                    }
+
+                    // Calculate growth between last two years
+                    if (index === formattedData.length - 1) {
+                        currentPeriodTotal = item.total;
+                    } else if (index === formattedData.length - 2) {
+                        previousPeriodTotal = item.total;
+                    }
                 });
                 break;
             }
@@ -193,9 +247,24 @@ const ExpenseChart: React.FC = () => {
                 }
 
                 formattedData = Object.values(monthlyData).sort((a, b) => (a.monthNum as number) - (b.monthNum as number));
-                formattedData.forEach(item => {
+
+                // Calculate statistics
+                formattedData.forEach((item) => {
                     item.average = item.count ? item.total / item.count : 0;
+                    totalSum += item.total;
+
+                    if (item.total > maxValue) {
+                        maxValue = item.total;
+                        maxMonth = item.month || '';
+                    }
                 });
+
+                // Calculate month-over-month growth
+                const currentMonth = dayjs().month();
+                if (currentMonth > 0) {
+                    currentPeriodTotal = monthlyData[currentMonth]?.total || 0;
+                    previousPeriodTotal = monthlyData[currentMonth - 1]?.total || 0;
+                }
                 break;
             }
 
@@ -223,14 +292,42 @@ const ExpenseChart: React.FC = () => {
                 }, {});
 
                 formattedData = Object.values(weeklyData).sort((a, b) => (a.weekNum as number) - (b.weekNum as number));
-                formattedData.forEach(item => {
+
+                // Calculate statistics
+                formattedData.forEach((item, index) => {
                     item.average = item.count ? item.total / item.count : 0;
+                    totalSum += item.total;
+
+                    if (item.total > maxValue) {
+                        maxValue = item.total;
+                        maxMonth = item.week || '';
+                    }
+
+                    // Calculate growth between last two weeks
+                    if (index === formattedData.length - 1) {
+                        currentPeriodTotal = item.total;
+                    } else if (index === formattedData.length - 2) {
+                        previousPeriodTotal = item.total;
+                    }
                 });
                 break;
             }
         }
 
+        // Calculate average and growth
+        const averageValue = formattedData.length > 0 ? totalSum / formattedData.length : 0;
+        const growthValue = previousPeriodTotal > 0
+            ? ((currentPeriodTotal - previousPeriodTotal) / previousPeriodTotal) * 100
+            : 0;
+
         setChartData(formattedData);
+        setStatistics({
+            total: totalSum,
+            average: averageValue,
+            maxMonth,
+            maxValue,
+            growth: growthValue
+        });
     }, [fakturData, viewMode, selectedYear]);
 
     useEffect(() => {
@@ -256,7 +353,7 @@ const ExpenseChart: React.FC = () => {
                     padding: '12px',
                     border: '1px solid #f0f0f0',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    borderRadius: '6px'
+                    borderRadius: '8px'
                 }}>
                     <p className="label" style={{ fontWeight: 'bold', margin: '0 0 8px 0' }}>{label}</p>
                     <p style={{ margin: '4px 0', color: '#f5222d' }}>
@@ -264,11 +361,11 @@ const ExpenseChart: React.FC = () => {
                     </p>
                     {payload[1] && (
                         <p style={{ margin: '4px 0', color: '#1890ff' }}>
-                            Average: {formatCurrency(payload[1].value)}
+                            Rata-rata: {formatCurrency(payload[1].value)}
                         </p>
                     )}
                     <p style={{ margin: '4px 0', color: '#8c8c8c', fontSize: '12px' }}>
-                        Count: {payload[0].payload.count} invoices
+                        Jumlah: {payload[0].payload.count} faktur
                     </p>
                 </div>
             );
@@ -276,139 +373,241 @@ const ExpenseChart: React.FC = () => {
         return null;
     };
 
-    return (
-        <Card
-            title={
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <LineChartOutlined style={{ color: '#f5222d', marginRight: '8px', fontSize: '18px' }} />
-                    <Text strong style={{ fontSize: '16px' }}>Grafik Pengeluaran Faktur</Text>
-                </div>
-            }
-            extra={
-                <Button
-                    type="primary"
-                    icon={<ReloadOutlined />}
-                    onClick={fetchData}
-                    loading={loading}
-                    style={{
-                        borderRadius: '8px',
-                        boxShadow: '0 2px 8px rgba(24, 144, 255, 0.2)',
-                        display: 'flex',
-                        alignItems: 'center'
-                    }}
-                >
-                    Perbarui
-                </Button>
-            }
-            style={{
-                borderRadius: '12px',
-                border: 'none',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
-                marginBottom: '16px'
-            }}
-        >
-            <Space direction="vertical" style={{ width: '100%' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
-                    <Radio.Group
-                        value={viewMode}
-                        onChange={(e) => setViewMode(e.target.value)}
-                        optionType="button"
-                        buttonStyle="solid"
-                        style={{ marginBottom: '16px' }}
-                    >
-                        <Radio.Button value="yearly">Tahunan</Radio.Button>
-                        <Radio.Button value="monthly">Bulanan</Radio.Button>
-                        <Radio.Button value="weekly">Mingguan</Radio.Button>
-                    </Radio.Group>
+    const getChartIcon = () => {
+        return chartType === 'line' ? <LineChartOutlined /> : <BarChartOutlined />;
+    };
 
-                    {viewMode !== 'yearly' && (
-                        <DatePicker
-                            picker="year"
-                            value={dayjs().year(selectedYear)}
-                            onChange={(date) => setSelectedYear(date ? date.year() : dayjs().year())}
-                            allowClear={false}
-                            style={{ width: '120px' }}
+    const getViewModeText = () => {
+        switch (viewMode) {
+            case 'yearly': return 'Tahunan';
+            case 'monthly': return 'Bulanan';
+            case 'weekly': return 'Mingguan';
+            default: return '';
+        }
+    };
+
+    const renderChart = () => {
+        if (chartType === 'line') {
+            return (
+                <LineChart
+                    data={chartData}
+                    margin={{ top: 10, right: 30, left: 20, bottom: 30 }}
+                >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis
+                        dataKey={viewMode === 'yearly' ? 'year' : viewMode === 'monthly' ? 'month' : 'week'}
+                        tick={{ fontSize: 12 }}
+                        axisLine={{ stroke: '#d9d9d9' }}
+                        tickLine={{ stroke: '#d9d9d9' }}
+                    />
+                    <YAxis
+                        axisLine={{ stroke: '#d9d9d9' }}
+                        tickLine={{ stroke: '#d9d9d9' }}
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(value) => `Rp${value / 1000}k`}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    <Line
+                        type="monotone"
+                        dataKey="total"
+                        name="Total Pengeluaran"
+                        stroke="#f5222d"
+                        strokeWidth={2}
+                        dot={{ r: 4, fill: '#f5222d', stroke: 'white', strokeWidth: 2 }}
+                        activeDot={{ r: 6, fill: '#f5222d', stroke: 'white', strokeWidth: 2 }}
+                    />
+                    <Line
+                        type="monotone"
+                        dataKey="average"
+                        name="Rata-rata Pengeluaran"
+                        stroke="#1890ff"
+                        strokeWidth={2}
+                        dot={{ r: 4, fill: '#1890ff', stroke: 'white', strokeWidth: 2 }}
+                        activeDot={{ r: 6, fill: '#1890ff', stroke: 'white', strokeWidth: 2 }}
+                        strokeDasharray="3 3"
+                    />
+                </LineChart>
+            );
+        } else {
+            return (
+                <BarChart
+                    data={chartData}
+                    margin={{ top: 10, right: 30, left: 20, bottom: 30 }}
+                >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis
+                        dataKey={viewMode === 'yearly' ? 'year' : viewMode === 'monthly' ? 'month' : 'week'}
+                        tick={{ fontSize: 12 }}
+                        axisLine={{ stroke: '#d9d9d9' }}
+                        tickLine={{ stroke: '#d9d9d9' }}
+                    />
+                    <YAxis
+                        axisLine={{ stroke: '#d9d9d9' }}
+                        tickLine={{ stroke: '#d9d9d9' }}
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(value) => `Rp${value / 1000}k`}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    <Bar
+                        dataKey="total"
+                        name="Total Pengeluaran"
+                        fill="#f5222d"
+                        radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                        dataKey="average"
+                        name="Rata-rata Pengeluaran"
+                        fill="#1890ff"
+                        radius={[4, 4, 0, 0]}
+                    />
+                </BarChart>
+            );
+        }
+    };
+
+    // Removed the duplicate Card component and redesigned the layout
+    return (
+        <div className="expense-chart-container">
+            {error && (
+                <Alert
+                    message="Error"
+                    description={error}
+                    type="error"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                />
+            )}
+
+            <Card
+                title={
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Space>
+                            <Title level={4} style={{ margin: 0 }}>
+                            {getChartIcon()} <span>{viewMode === 'yearly' ? 'Tren Pengeluaran Tahunan' : viewMode === 'monthly' ? 'Tren Pengeluaran Bulanan' : 'Tren Pengeluaran Mingguan'}</span>
+                            </Title>
+                            <AntTooltip title={`Menampilkan data pengeluaran ${getViewModeText().toLowerCase()}`}>
+                                <InfoCircleOutlined style={{ color: '#1890ff' }} />
+                            </AntTooltip>
+                        </Space>
+                        <Space>
+                            {viewMode !== 'yearly' && (
+                                <DatePicker
+                                    picker="year"
+                                    value={dayjs().year(selectedYear)}
+                                    onChange={(date) => setSelectedYear(date ? date.year() : dayjs().year())}
+                                    format="YYYY"
+                                    allowClear={false}
+                                    style={{ marginRight: 8 }}
+                                    suffixIcon={<CalendarOutlined />}
+                                />
+                            )}
+                            <Segmented
+                                value={viewMode}
+                                onChange={(value) => setViewMode(value as ViewMode)}
+                                options={[
+                                    { value: 'yearly', label: 'Tahunan' },
+                                    { value: 'monthly', label: 'Bulanan' },
+                                    { value: 'weekly', label: 'Mingguan' }
+                                ]}
+                                style={{ marginRight: 8 }}
+                            />
+                            <Radio.Group
+                                value={chartType}
+                                onChange={(e) => setChartType(e.target.value)}
+                                optionType="button"
+                                buttonStyle="solid"
+                            >
+                               <Radio.Button value="line">{chartType === 'line' ? getChartIcon() : <LineChartOutlined />} Line</Radio.Button>
+                               <Radio.Button value="bar">{chartType === 'bar' ? getChartIcon() : <BarChartOutlined />} Bar</Radio.Button>
+                            </Radio.Group>
+                            <Button
+                                icon={<ReloadOutlined />}
+                                onClick={fetchData}
+                                loading={loading}
+                                type="primary"
+                                ghost
+                            />
+                        </Space>
+                    </div>
+                }
+                bordered={false}
+                style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}
+                bodyStyle={{ padding: '12px 24px 24px' }}
+            >
+                {/* Stats Cards */}
+                <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                    <Col xs={24} sm={12} xl={6}>
+                        <Card bordered={false} style={{ background: '#f6ffed', borderRadius: 8 }}>
+                            <Statistic
+                                title="Total Pengeluaran"
+                                value={statistics.total}
+                                precision={0}
+                                valueStyle={{ color: '#52c41a' }}
+                                prefix={<DollarOutlined />}
+                                formatter={(value) => formatCurrency(Number(value))}
+                            />
+                        </Card>
+                    </Col>
+                    <Col xs={24} sm={12} xl={6}>
+                        <Card bordered={false} style={{ background: '#e6f7ff', borderRadius: 8 }}>
+                            <Statistic
+                                title="Rata-rata Pengeluaran"
+                                value={statistics.average}
+                                precision={0}
+                                valueStyle={{ color: '#1890ff' }}
+                                prefix={<DollarOutlined />}
+                                formatter={(value) => formatCurrency(Number(value))}
+                            />
+                        </Card>
+                    </Col>
+                    <Col xs={24} sm={12} xl={6}>
+                        <Card bordered={false} style={{ background: '#fff1f0', borderRadius: 8 }}>
+                            <Statistic
+                                title={`${viewMode === 'yearly' ? 'Tahun' : viewMode === 'monthly' ? 'Bulan' : 'Minggu'} Tertinggi`}
+                                value={statistics.maxValue}
+                                precision={0}
+                                valueStyle={{ color: '#f5222d' }}
+                                prefix={<DollarOutlined />}
+                                formatter={(value) => formatCurrency(Number(value))}
+                                suffix={<Text type="secondary" style={{ fontSize: 14 }}>({statistics.maxMonth})</Text>}
+                            />
+                        </Card>
+                    </Col>
+                    <Col xs={24} sm={12} xl={6}>
+                        <Card bordered={false} style={{ background: statistics.growth >= 0 ? '#f6ffed' : '#fff1f0', borderRadius: 8 }}>
+                            <Statistic
+                                title="Pertumbuhan"
+                                value={statistics.growth}
+                                precision={2}
+                                valueStyle={{ color: statistics.growth >= 0 ? '#52c41a' : '#f5222d' }}
+                                prefix={statistics.growth >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+                                suffix="%"
+                            />
+                        </Card>
+                    </Col>
+                </Row>
+
+                {/* Chart Container */}
+                <div style={{ width: '100%', height: 400, paddingTop: 8 }}>
+                    {loading ? (
+                        <div style={{ height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <Spin size="large" />
+                        </div>
+                    ) : chartData.length === 0 ? (
+                        <Empty
+                            description="Tidak ada data pengeluaran untuk ditampilkan"
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
                         />
+                    ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                            {renderChart()}
+                        </ResponsiveContainer>
                     )}
                 </div>
-
-                {error && (
-                    <Alert
-                        message="Error"
-                        description={error}
-                        type="error"
-                        showIcon
-                        style={{ marginBottom: '16px' }}
-                    />
-                )}
-
-                {loading ? (
-                    <div style={{ height: '300px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                        <Spin size="large" />
-                    </div>
-                ) : chartData.length === 0 ? (
-                    <Empty
-                        description="Tidak ada data pengeluaran tersedia"
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        style={{ margin: '32px 0' }}
-                    />
-                ) : (
-                    <div style={{ width: '100%', height: '300px' }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart
-                                data={chartData}
-                                margin={{ top: 10, right: 30, left: 20, bottom: 30 }}
-                            >
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                <XAxis
-                                    dataKey={viewMode === 'yearly' ? 'year' : viewMode === 'monthly' ? 'month' : 'week'}
-                                    tick={{ fontSize: 12 }}
-                                    axisLine={{ stroke: '#d9d9d9' }}
-                                    tickLine={{ stroke: '#d9d9d9' }}
-                                />
-                                <YAxis
-                                    axisLine={{ stroke: '#d9d9d9' }}
-                                    tickLine={{ stroke: '#d9d9d9' }}
-                                    tick={{ fontSize: 12 }}
-                                    tickFormatter={(value) => `Rp${value / 1000}k`}
-                                />
-                                <Tooltip content={<CustomTooltip />} />
-                                <Legend />
-                                <Line
-                                    type="monotone"
-                                    dataKey="total"
-                                    name="Total Pengeluaran"
-                                    stroke="#f5222d"
-                                    strokeWidth={2}
-                                    dot={{ r: 4, fill: '#f5222d', stroke: 'white', strokeWidth: 2 }}
-                                    activeDot={{ r: 6, fill: '#f5222d', stroke: 'white', strokeWidth: 2 }}
-                                />
-                                <Line
-                                    type="monotone"
-                                    dataKey="average"
-                                    name="Rata-rata Pengeluaran"
-                                    stroke="#1890ff"
-                                    strokeWidth={2}
-                                    dot={{ r: 4, fill: '#1890ff', stroke: 'white', strokeWidth: 2 }}
-                                    activeDot={{ r: 6, fill: '#1890ff', stroke: 'white', strokeWidth: 2 }}
-                                    strokeDasharray="3 3"
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                )}
-
-                <div style={{ marginTop: '12px', textAlign: 'right' }}>
-                    <Text type="secondary" style={{ fontSize: '13px' }}>
-                        <DollarOutlined style={{ marginRight: '4px' }} />
-                        {chartData.length > 0
-                            ? `Total pengeluaran: ${formatCurrency(chartData.reduce((sum, item) => sum + item.total, 0))}`
-                            : 'Tidak ada data'
-                        }
-                    </Text>
-                </div>
-            </Space>
-        </Card>
+            </Card>
+        </div>
     );
 };
 

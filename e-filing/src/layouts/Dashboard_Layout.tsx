@@ -90,9 +90,13 @@ const DashboardLayout: React.FC = () => {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50">
-                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
-                <p className="mt-4 text-gray-600">Loading...</p>
+            <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-br from-indigo-50 to-blue-50">
+                <div className="relative w-24 h-24">
+                    <div className="absolute inset-0 border-4 border-t-indigo-600 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+                    <div className="absolute inset-2 border-4 border-t-transparent border-r-indigo-400 border-b-transparent border-l-transparent rounded-full animate-spin animation-delay-150"></div>
+                    <div className="absolute inset-4 border-4 border-t-transparent border-r-transparent border-b-indigo-200 border-l-transparent rounded-full animate-spin animation-delay-300"></div>
+                </div>
+                <p className="mt-6 text-indigo-800 font-medium animate-pulse">Memuat data surat...</p>
             </div>
         );
     }
@@ -118,10 +122,10 @@ const DashboardLayout: React.FC = () => {
             getItem('Faktur', '5', <DollarOutlined style={{ color: '#fa541c' }} />, undefined, () => navigate('/dashboard/faktur')),
         ]),
         getItem('Team', 'sub2', <TeamOutlined />, [
-            getItem('Team 1', '6', undefined, undefined, () => navigate('/dashboard/team-1')),
-            getItem('Team 2', '7', undefined, undefined, () => navigate('/dashboard/team-2')),
+            getItem('Team 1', '6', undefined, undefined, () => navigate('#')),
+            getItem('Team 2', '7', undefined, undefined, () => navigate('#')),
         ]),
-        getItem('Files', '8', <FileOutlined />, undefined, () => navigate('/dashboard/files')),
+        getItem('Files', '8', <FileOutlined />, undefined, () => navigate('#')),
     ];
 
     const userMenuItems: MenuProps['items'] = [
@@ -135,7 +139,7 @@ const DashboardLayout: React.FC = () => {
             key: '2',
             label: 'Settings',
             icon: <SettingOutlined />,
-            onClick: () => navigate('/dashboard/settings'),
+            onClick: () => navigate('#'),
         },
         {
             type: 'divider',

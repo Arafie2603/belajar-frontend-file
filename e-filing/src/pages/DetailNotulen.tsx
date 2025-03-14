@@ -153,27 +153,27 @@ const DetailNotulen: React.FC = () => {
     useEffect(() => {
         const fetchNotulenDetail = async () => {
             let loadingInterval: NodeJS.Timeout | undefined;
-        
+
             try {
                 setLoadingProgress(0);
                 setDataReady(false);
-        
+
                 loadingInterval = setInterval(() => {
                     setLoadingProgress(prev => (prev >= 95 ? 95 : prev + 5));
                 }, 300);
-        
+
                 // Fetch notulen details
                 const response = await axios.get(`${BASE_URL}api/notulen/${id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-        
+
                 const responseData = response.data.data;
-        
+
                 // Fetch user data
                 const usersResponse = await axios.get(`${BASE_URL}api/users`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-        
+
                 // Fix #1: Check for paginated data structure and handle appropriately
                 let usersData = [];
                 if (usersResponse.data?.data?.paginatedData && Array.isArray(usersResponse.data.data.paginatedData)) {
@@ -187,9 +187,9 @@ const DetailNotulen: React.FC = () => {
                 } else if (Array.isArray(usersResponse.data.data)) {
                     usersData = usersResponse.data.data;
                 }
-        
+
                 console.log("usersData:", usersData); // Debugging, make sure this shows phone numbers
-        
+
                 // Fix #2: Create a more robust user map that includes all user details
                 const userMap: Record<string, User> = {};
                 usersData.forEach((user: User) => {
@@ -197,20 +197,20 @@ const DetailNotulen: React.FC = () => {
                         userMap[user.id] = user;
                     }
                 });
-        
+
                 let parsedPeserta: Participant[] = [];
-        
+
                 if (responseData.peserta) {
                     try {
                         parsedPeserta = JSON.parse(responseData.peserta) as Participant[];
-        
+
                         // Fix #3: Enhanced mapping with better error handling
                         parsedPeserta = parsedPeserta.map((participant: Participant) => {
                             if (participant.id && participant.type === 'registered' && userMap[participant.id]) {
                                 const userData = userMap[participant.id];
                                 // Fix #4: Check for phone number in multiple possible fields
                                 const phoneNumber = userData.no_telp || participant.no_telp || '';
-                                
+
                                 return {
                                     ...participant,
                                     no_telp: phoneNumber,
@@ -219,34 +219,34 @@ const DetailNotulen: React.FC = () => {
                             }
                             return participant;
                         });
-        
+
                         console.log('Enhanced participants with phone numbers:', parsedPeserta);
                     } catch (parseErr) {
                         console.error('Error parsing peserta:', parseErr);
                         parsedPeserta = [];
                     }
                 }
-        
+
                 responseData.parsedPeserta = parsedPeserta;
-        
+
                 setData(responseData);
                 setError(null);
-        
+
                 if (loadingInterval) clearInterval(loadingInterval);
-        
+
                 setLoadingProgress(100);
                 setTimeout(() => {
                     setLoading(false);
                     setDataReady(true);
                 }, 500);
-        
+
             } catch (err) {
                 console.error('Error fetching notulen details:', err);
                 setError(err instanceof Error ? err.message : 'Terjadi kesalahan saat memuat data');
-        
+
                 if (loadingInterval) clearInterval(loadingInterval);
                 setLoadingProgress(100);
-        
+
                 setTimeout(() => {
                     setLoading(false);
                 }, 500);
@@ -268,15 +268,17 @@ const DetailNotulen: React.FC = () => {
         try {
             // Pastikan data tersedia dan parsedPeserta tidak undefined/null
             const pesertaList = data?.parsedPeserta ?? [];
-    
+
             if (pesertaList.length === 0) {
                 antMessage.error('Tidak ada peserta yang terdaftar untuk dibagikan');
                 return;
             }
-    
+
             // Debug participant data
             console.log('Participant data before validation:', pesertaList);
-    
+
+
+
             // Improved phone number validation
             const validParticipants = pesertaList.filter(p => {
                 const hasPhone = p.no_telp && p.no_telp.trim().length > 0;
@@ -285,15 +287,15 @@ const DetailNotulen: React.FC = () => {
                 }
                 return hasPhone;
             });
-    
+
             if (validParticipants.length === 0) {
                 antMessage.error('Tidak ada nomor telepon peserta yang valid');
                 console.log('No valid participants with phone numbers found');
                 return;
             }
-    
+
             console.log('Valid participants with phone numbers:', validParticipants);
-    
+
             // Show confirmation modal
             confirm({
                 title: 'Bagikan Notulen',
@@ -304,18 +306,18 @@ const DetailNotulen: React.FC = () => {
                 onOk: async () => {
                     // Show loading message
                     const closeLoading = antMessage.loading('Mengirim pesan ke peserta...', 0);
-    
+
                     try {
                         // Format meeting date
                         const meetingDate = dayjs(data?.tanggal_rapat);
                         const now = dayjs();
                         const isMeetingPassed = now.isAfter(meetingDate);
-    
+
                         // Prepare messages array with improved phone formatting
                         const messages = validParticipants.map(participant => {
                             let phoneNumber = participant.no_telp?.trim() ?? '';
                             console.log(`Processing ${participant.name} with original phone: ${phoneNumber}`);
-    
+
                             // Format phone number properly
                             if (!phoneNumber.startsWith('+')) {
                                 if (phoneNumber.startsWith('0')) {
@@ -326,9 +328,9 @@ const DetailNotulen: React.FC = () => {
                                     phoneNumber = '+62' + phoneNumber;
                                 }
                             }
-                            
+
                             console.log(`Formatted phone number: ${phoneNumber}`);
-    
+
                             // Rest of your message formatting code unchanged
                             let timeContext;
                             if (isMeetingPassed) {
@@ -343,7 +345,7 @@ const DetailNotulen: React.FC = () => {
                                     timeContext = `dalam ${daysUntil} hari pada ${meetingDate.format('D MMMM YYYY, HH:mm')}`;
                                 }
                             }
-    
+
                             return {
                                 phone: phoneNumber,
                                 message: `Hallo *${participant.name}*,\n\n` +
@@ -359,25 +361,31 @@ const DetailNotulen: React.FC = () => {
                                     "Salam hangat dari mimin, dan semangat selalu untuk labkomers! 💪"
                             };
                         });
-    
+
                         if (messages.length === 0) {
                             closeLoading();
                             antMessage.error('Tidak ada nomor telepon peserta yang valid');
                             return;
                         }
-    
+
                         console.log('Sending messages to:', messages.map(m => m.phone));
-    
+
                         // Send batch messages
                         const response = await axios.post(
                             'http://localhost:4001/sessions/a0b531adf5b71043/send-batch',
                             { messages },
-                            { headers: { 'Content-Type': 'application/json' } }
+                            {
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': import.meta.env.VITE_AUTH_HEADER
+                                }
+                            }
                         );
-    
+
+
                         // Close the loading message
                         closeLoading();
-    
+
                         if (response.data.success) {
                             antMessage.success(`Berhasil mengirim notifikasi kepada ${messages.length} peserta`);
                         } else {
