@@ -49,6 +49,7 @@ import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { ColumnType } from 'antd/es/table';
 import { CACHE_KEYS, invalidateSpecificCache } from '../hooks/useDashboardData';
+import { NotulenDetail, sendAutomaticNotification } from '../utils/sendAutomaticNotification';
 
 
 const { Content } = Layout;
@@ -89,7 +90,7 @@ interface User {
 }
 
 
-interface Participant {
+export interface Participant {
     id?: string;
     name: string;
     no_telp?: string;
@@ -318,67 +319,105 @@ export const NotulenForm: React.FC<FormProps> = ({
     const handleRemoveSelectedUser = (userId: string) => {
         setSelectedUsers(selectedUsers.filter(id => id !== userId));
     };
-    const handleSubmit = (values: any) => {
+    const handleSubmit = async (values: any) => { // Tambahkan async di sini
         const formData = new FormData();
 
-        // Format tanggal rapat sesuai kebutuhan backend
+        // Pastikan tanggal dikonversi menjadi string (YYYY-MM-DD)
+        const formattedTanggal = Array.isArray(values.tanggal)
+            ? values.tanggal[0].format('YYYY-MM-DD')
+            : values.tanggal
+                ? values.tanggal.format('YYYY-MM-DD')
+                : '';
+
         const formattedValues = {
             ...values,
-            // Pastikan tanggal dikirim dalam format YYYY-MM-DD
-            tanggal: values.tanggal ? values.tanggal.format('YYYY-MM-DD') : ''
+            tanggal: formattedTanggal
+        };
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('No authentication token found');
+            return;
+        }
+
+        console.log('Fetching users from:', `${BASE_URL}api/users`);
+
+        // Tambahkan await di dalam fungsi async
+        const response = await axios.get(`${BASE_URL}api/users`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+
+        const notulenId = response.data?.id;
+        const notulenData = response.data?.data;
+
+        if (notulenId && notulenData) {
+            let pesertaList: any[] = [];
+            const pesertaJSON = formData.get('peserta');
+
+            if (pesertaJSON && typeof pesertaJSON === 'string') {
+                try {
+                    pesertaList = JSON.parse(pesertaJSON);
+                } catch (error) {
+                    console.error("Error parsing peserta:", error);
+                }
+            }
+
+            const validParticipants = Array.isArray(pesertaList)
+                ? pesertaList.filter(p => p.no_telp)
+                : [];
+
+            if (validParticipants.length > 0) {
+                await sendAutomaticNotification(validParticipants, notulenData);
+            }
         }
 
         delete formattedValues.tanggal_rapat;
 
         const participantsList = [
-            // Add selected registered users
-            ...selectedUsers.map(userId => {
-                const user = users.find(u => u.id === userId);
-                return {
-                    id: userId,
-                    name: user?.name || 'Unknown User',
-                    type: 'registered',
-                    role: user?.role || '',
-                    email: user?.email || '',
-                    no_telp: user?.no_telp,
-                    nomor_identitas: user?.nomor_identitas,
-                };
-            }),
-            // Add custom participants
+            ...selectedUsers
+                .map(userId => {
+                    const user = users.find(u => u.id === userId);
+                    return user
+                        ? {
+                            id: user.id,
+                            name: user.name,
+                            type: 'registered',
+                            role: user.role || '',
+                            email: user.email || '',
+                            no_telp: user.no_telp || '',
+                            nomor_identitas: user.nomor_identitas || '',
+                        }
+                        : null;
+                })
+                .filter((user): user is NonNullable<typeof user> => user !== null),
             ...customParticipants.map(name => ({
+                id: '',
                 name,
-                type: 'custom'
+                type: 'custom',
+                role: '',
+                email: '',
+                no_telp: '',
+                nomor_identitas: '',
             }))
         ];
 
-        // Create a formatted string for backward compatibility
-        const participantsText = [
-            // Add registered users names
-            ...selectedUsers.map(userId => {
-                const user = users.find(u => u.id === userId);
-                return user ? user.name : '';
-            }).filter(Boolean),
-            // Add custom participants
-            ...customParticipants
-        ].join('\n');
+        const participantsText = participantsList.map(p => p.name).join('\n');
 
-        // Add all form values to FormData
         Object.entries(formattedValues).forEach(([key, value]: [string, any]) => {
             if (key !== 'peserta' && value !== undefined && value !== null) {
                 formData.append(key, value);
             }
         });
 
-        // Add participants data
         formData.append('peserta', JSON.stringify(participantsList));
         formData.append('peserta_text', participantsText);
 
-        // Add file if a new file has been selected
         if (fileList.length > 0 && fileList[0].originFileObj) {
             formData.append('dokumen_lampiran', fileList[0].originFileObj);
         }
 
-        // For edit mode, we need to handle whether a new file was selected
         if (isEdit) {
             formData.append('keep_existing_file', (!fileList.length || !fileList[0].originFileObj) ? 'true' : 'false');
             if (initialValues && initialValues.id) {
@@ -393,8 +432,10 @@ export const NotulenForm: React.FC<FormProps> = ({
             fileChanged: (fileList.length > 0 && fileList[0].originFileObj) ? true : false
         });
 
-        onSubmit(formData);
+        await onSubmit(formData); // Pastikan onSubmit juga mendukung async
     };
+
+
 
     return (
         <Modal
@@ -770,7 +811,7 @@ const EnhancedDeleteConfirmationModal: React.FC<EnhancedDeleteConfirmationModalP
 };
 
 export default function NotulenPage() {
-    const { isAuthenticated, token } = useAuth();
+    const { isAuthenticated } = useAuth();
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [isEditModalVisible, setIsEditModalVisible] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<NotulenType | null>(null);
@@ -856,6 +897,83 @@ export default function NotulenPage() {
         return result;
     }, [notulenData, filters, searchText]);
 
+    const handleSubmit = async (formData: FormData) => {
+        setSubmitting(true);
+        try {
+            const response = await axios.post(`${BASE_URL}api/notulen`, formData, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            const newNotulen = response.data?.data;
+
+            if (newNotulen) {
+                let participantsList = [];
+                const pesertaValue = formData.get('peserta');
+
+                if (pesertaValue && typeof pesertaValue === 'string') {
+                    try {
+                        participantsList = JSON.parse(pesertaValue);
+                    } catch (error) {
+                        console.error("Error parsing peserta data:", error);
+                    }
+                }
+
+                const validParticipants = Array.isArray(participantsList)
+                    ? participantsList.filter(p => p && p.no_telp && p.no_telp.trim() !== '')
+                    : [];
+
+                if (validParticipants.length > 0) {
+                    console.log("Sending notifications to:", validParticipants);
+                    try {
+                        await sendAutomaticNotification(validParticipants, newNotulen);
+                        console.log("Notifications sent successfully");
+                    } catch (notifError) {
+                        console.error("Failed to send notifications:", notifError);
+                    }
+                } else {
+                    console.warn("No valid participants with phone numbers found for notifications");
+                }
+
+                message.success('Notulen berhasil disimpan!');
+                setIsModalVisible(false);
+
+                invalidateSpecificCache(CACHE_KEYS.NOTULEN);
+                invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
+                invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
+
+                eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
+                eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
+            }
+        } catch (err) {
+            const error = err as Error;
+            message.error('Gagal menyimpan notulen: ' + (error.message || 'Unknown error'));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleEdit = async (record: NotulenType) => {
+        try {
+            const cachedNotulen = data.paginatedData.find((notulen) => notulen.id === record.id);
+
+            if (cachedNotulen) {
+                setCurrentRecord(cachedNotulen);
+                setIsEditModalVisible(true);
+            } else {
+                const fetchedNotulen = await fetchNotulenById(record.id);
+                if (fetchedNotulen) {
+                    setCurrentRecord(fetchedNotulen);
+                    setIsEditModalVisible(true);
+                }
+            }
+        } catch (err) {
+            const error = err as Error;
+            message.error('Gagal mengambil data notulen: ' + (error.message || 'Unknown error'));
+        }
+    };
 
 
 
@@ -933,63 +1051,14 @@ export default function NotulenPage() {
         };
     }, [refreshDataCallback]);
 
-    const handleEdit = async (record: NotulenType) => {
-        try {
-            // Cek apakah data notulen sudah ada dalam cache
-            const cachedNotulen = data.paginatedData.find((notulen) => notulen.id === record.id);
 
-            if (cachedNotulen) {
-                setCurrentRecord(cachedNotulen);
-                setIsEditModalVisible(true);
-            } else {
-                // Jika tidak ada di cache, ambil dari API
-                const fetchedNotulen = await fetchNotulenById(record.id);
-                if (fetchedNotulen) {
-                    setCurrentRecord(fetchedNotulen);
-                    setIsEditModalVisible(true);
-                }
-            }
-        } catch (err) {
-            const error = err as Error;
-            message.error('Gagal mengambil data notulen: ' + (error.message || 'Unknown error'));
-        }
-    };
 
 
     const handleViewDetail = (record: NotulenType) => {
         navigate(`/dashboard/notulen/${record.id}`);
     };
 
-    const handleSubmit = async (formData: FormData) => {
-        setSubmitting(true);
-        try {
-            await axios.post(`${BASE_URL}api/notulen`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                    Authorization: `Bearer ${token}`
-                },
-            });
 
-            message.success('Notulen berhasil ditambahkan!');
-            invalidateSpecificCache(CACHE_KEYS.NOTULEN);
-
-            invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
-            invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
-
-            eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
-            eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
-            setIsModalVisible(false);
-
-        } catch (err) {
-            const error = err as any;
-            message.error(
-                'Gagal menambahkan notulen: ' +
-                (error.response?.data?.message || error.message)
-            );
-        } finally {
-            setSubmitting(false);
-        }
-    };
 
     const handleUpdate = async (formData: FormData) => {
         if (!currentRecord?.id) return;
@@ -1000,13 +1069,46 @@ export default function NotulenPage() {
             message.success('Notulen berhasil diperbarui!');
             setIsEditModalVisible(false);
 
+            // Invalidate cache untuk memperbarui UI
             invalidateSpecificCache(CACHE_KEYS.NOTULEN);
-
             invalidateSpecificCache(CACHE_KEYS.DASHBOARD_STATS);
             invalidateSpecificCache(CACHE_KEYS.RECENT_DOCS);
 
+            // Emit event untuk sinkronisasi data
             eventBus.emit(DATA_EVENTS.NOTULEN_UPDATED);
             eventBus.emit(DATA_EVENTS.ANY_DATA_UPDATED);
+
+            // Pastikan peserta dalam bentuk array yang valid
+            let pesertaList: any[] = [];
+            if (currentRecord?.peserta) {
+                try {
+                    pesertaList = JSON.parse(currentRecord.peserta);
+                } catch (error) {
+                    console.error("Error parsing peserta:", error);
+                }
+            }
+
+            // Pastikan peserta_list sudah valid
+            const validParticipants = Array.isArray(pesertaList)
+                ? pesertaList.filter(p => p.no_telp)
+                : [];
+            const safeCurrentRecord: NotulenDetail = {
+                ...currentRecord,
+                updated_by: currentRecord.updated_by ?? '', // Jika undefined, beri string kosong
+                created_by: currentRecord.created_by ?? '', // Tambahkan default untuk created_by
+                user_id: currentRecord.user_id ?? '', // Tambahkan default untuk user_id
+            };
+
+
+
+
+            // Kirim notifikasi jika ada peserta dengan nomor telepon
+            if (validParticipants.length > 0) {
+                // Send the current record as the second parameter
+                await sendAutomaticNotification(validParticipants, safeCurrentRecord);
+            } else {
+                console.warn('Tidak ada peserta dengan nomor telepon valid.');
+            }
         } catch (err) {
             const error = err as Error;
             message.error(
@@ -1016,6 +1118,7 @@ export default function NotulenPage() {
             setSubmitting(false);
         }
     };
+
 
 
     if (loading) {

@@ -1,11 +1,9 @@
-import { StrictMode } from 'react';
+import { StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Suspense } from 'react';
 import { ThemeProvider } from 'styled-components';
 import './index.css';
-import AppRoutes from './route/routes';
-import { RouterProvider } from 'react-router-dom';
 import LoadingOverlay from './components/LoadingOverlay';
+import App from './App'; // Import App.tsx
 
 // Tema default (bisa dikustomisasi)
 const theme = {
@@ -16,8 +14,8 @@ const theme = {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider theme={theme}>
-      <Suspense fallback={<LoadingOverlay isLoading={true}/>}>
-        <RouterProvider router={AppRoutes} />
+      <Suspense fallback={<LoadingOverlay isLoading={true} />}>
+        <App /> {/* Gunakan App.tsx sebagai entry point utama */}
       </Suspense>
     </ThemeProvider>
   </StrictMode>

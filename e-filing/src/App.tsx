@@ -1,7 +1,13 @@
-// export default function App() {
-//   return (
-//     <p className ="text-3xl font-extrabold">
-//       Welcome to E-Filing
-//     </p>
-//   );
-// }
+import { NotulenProvider } from './context/NotulenContext';
+import { RouterProvider } from 'react-router-dom';
+import AppRoutes from './route/routes';
+
+function App() {
+    return (
+        <NotulenProvider>
+            <RouterProvider router={AppRoutes} />
+        </NotulenProvider>
+    );
+}
+
+export default App;
